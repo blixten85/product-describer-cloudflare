@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "product-describer-processor",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "product_describer",
+      "database_id": "TBD"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "product-describer-uploads"
+    }
+  ],
+  "queues": {
+    "consumers": [
+      {
+        "queue": "product-describer-jobs",
+        "max_batch_size": 10,
+        "max_retries": 10,
+        "max_concurrency": 4
+      }
+    ],
+    "producers": [
+      {
+        "queue": "product-describer-jobs",
+        "binding": "JOB_QUEUE"
+      }
+    ]
+  }
+}

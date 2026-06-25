@@ -1,0 +1,1 @@
+PROVIDER_CONFIG_KEY="generera-med: openssl rand -base64 32"

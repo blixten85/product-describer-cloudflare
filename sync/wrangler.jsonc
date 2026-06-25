@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "product-describer-sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    // scraper-API:et tunnlas publikt här (löst 2026-06-25), skyddat av
+    // X-API-Key (secret SCRAPER_API_KEY, satt via wrangler secret put).
+    "SCRAPER_URL": "https://scraper-api.denied.se"
+  }
+}

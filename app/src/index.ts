@@ -1,0 +1,245 @@
+// Motsvarar app.py:s Flask-rutter. Jobbkörningen själv (extraktion +
+// radvis beskrivningsgenerering) sker INTE här — den här Workern bara
+// validerar, sparar till R2/D1 och lägger ett "extract"-meddelande i kön;
+// processor-Workern (../processor/src/index.ts) gör det faktiska arbetet.
+
+import { signup, login, logout, requireAccount } from "./auth";
+import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
+import {
+  configuredProviders,
+  getProviderConfig,
+  setProviderConfig,
+  removeProviderConfig,
+  getOrder,
+  setOrder,
+  DEFAULT_MODELS,
+  EXTRA_FIELDS,
+  PROVIDER_NAMES,
+  type ProviderName,
+} from "../../shared/provider-config";
+
+const PROVIDER_LABELS: Record<ProviderName, string> = {
+  anthropic: "Claude (Anthropic)",
+  openai: "ChatGPT (OpenAI)",
+  gemini: "Gemini (Google)",
+  azure_openai: "Azure OpenAI Service",
+};
+
+const SUPPORTED_EXTENSIONS = [".csv", ".xlsx", ".txt", ".docx", ".pdf"];
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB, samma gräns som Flask-versionen
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    try {
+      return await route(request, env, url);
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : "Ett internt fel uppstod" }, 500);
+    }
+  },
+};
+
+async function route(request: Request, env: Env, url: URL): Promise<Response> {
+  const { pathname } = url;
+
+  if (pathname === "/signup" && request.method === "POST") return handleSignup(request, env);
+  if (pathname === "/login" && request.method === "POST") return handleLogin(request, env);
+  if (pathname === "/logout" && request.method === "POST") return handleLogout(request, env);
+
+  // Allt annat under /api/* kräver inloggning.
+  const account = await requireAccount(env, request);
+  if (!account) return json({ error: "Inte inloggad" }, 401);
+
+  if (pathname === "/api/status" && request.method === "GET") return handleStatus(env, account.id);
+  if (pathname === "/api/settings" && request.method === "GET") return handleGetSettings(env, account.id);
+  if (pathname === "/api/settings/key" && request.method === "POST") return handleSetKey(request, env, account.id);
+  if (pathname.startsWith("/api/settings/key/") && request.method === "DELETE") {
+    return handleDeleteKey(env, account.id, pathname.slice("/api/settings/key/".length));
+  }
+  if (pathname === "/api/settings/order" && request.method === "POST") return handleSetOrder(request, env, account.id);
+  if (pathname === "/api/upload" && request.method === "POST") return handleUpload(request, env, account.id);
+  if (pathname === "/api/jobs" && request.method === "GET") return handleListJobs(env, account.id);
+
+  const jobMatch = pathname.match(/^\/api\/jobs\/([^/]+)(\/download)?$/);
+  if (jobMatch && request.method === "GET") {
+    return jobMatch[2] ? handleDownloadJob(env, account.id, jobMatch[1]) : handleGetJob(env, account.id, jobMatch[1]);
+  }
+
+  return json({ error: "Hittar inte" }, 404);
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function withSessionCookie(body: unknown, sessionToken: string): Response {
+  const resp = json(body);
+  resp.headers.append(
+    "Set-Cookie",
+    `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
+  );
+  return resp;
+}
+
+async function handleSignup(request: Request, env: Env): Promise<Response> {
+  const data = await request.json<{ email?: string; password?: string }>().catch(() => ({}) as { email?: string; password?: string });
+  try {
+    const { accountId } = await signup(env, data.email ?? "", data.password ?? "");
+    const { sessionToken } = await login(env, data.email ?? "", data.password ?? "");
+    return withSessionCookie({ ok: true, accountId }, sessionToken);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : "Registrering misslyckades" }, 400);
+  }
+}
+
+async function handleLogin(request: Request, env: Env): Promise<Response> {
+  const data = await request.json<{ email?: string; password?: string }>().catch(() => ({}) as { email?: string; password?: string });
+  try {
+    const { sessionToken } = await login(env, data.email ?? "", data.password ?? "");
+    return withSessionCookie({ ok: true }, sessionToken);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : "Inloggning misslyckades" }, 401);
+  }
+}
+
+async function handleLogout(request: Request, env: Env): Promise<Response> {
+  const cookie = request.headers.get("Cookie") ?? "";
+  const token = cookie.match(/session=([^;]+)/)?.[1] ?? null;
+  await logout(env, token);
+  const resp = json({ ok: true });
+  resp.headers.append("Set-Cookie", "session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+  return resp;
+}
+
+async function handleStatus(env: Env, accountId: string): Promise<Response> {
+  const configured = await configuredProviders(env, accountId);
+  return json({ configured, ready: configured.length > 0 });
+}
+
+async function handleGetSettings(env: Env, accountId: string): Promise<Response> {
+  const order = await getOrder(env, accountId);
+  const configured = await configuredProviders(env, accountId);
+
+  const extraValues: Record<string, Record<string, string>> = {};
+  for (const [name, fields] of Object.entries(EXTRA_FIELDS)) {
+    const config = await getProviderConfig(env, accountId, name as ProviderName);
+    extraValues[name] = {};
+    for (const field of fields ?? []) extraValues[name][field.name] = config[field.name] ?? "";
+  }
+
+  return json({
+    configured: [...configured].sort(),
+    order,
+    available_models: Object.fromEntries(PROVIDER_NAMES.map((name) => [name, DEFAULT_MODELS[name] ? [DEFAULT_MODELS[name]] : []])),
+    labels: PROVIDER_LABELS,
+    extra_fields: EXTRA_FIELDS,
+    extra_values: extraValues,
+  });
+}
+
+async function handleSetKey(request: Request, env: Env, accountId: string): Promise<Response> {
+  const data = await request.json<Record<string, string>>().catch(() => ({}) as Record<string, string>);
+  const provider = data.provider as ProviderName;
+  if (!PROVIDER_NAMES.includes(provider)) return json({ error: "Okänd leverantör" }, 400);
+  const apiKey = data.api_key ?? "";
+  if (!apiKey.trim()) return json({ error: "Nyckel saknas" }, 400);
+
+  const extra: Record<string, string> = {};
+  for (const field of EXTRA_FIELDS[provider] ?? []) {
+    const value = (data[field.name] ?? "").trim();
+    if (!value) return json({ error: `Fältet "${field.label}" krävs` }, 400);
+    extra[field.name] = value;
+  }
+
+  await setProviderConfig(env, accountId, provider, { api_key: apiKey, ...extra });
+  return json({ ok: true });
+}
+
+async function handleDeleteKey(env: Env, accountId: string, provider: string): Promise<Response> {
+  if (!PROVIDER_NAMES.includes(provider as ProviderName)) return json({ error: "Okänd leverantör" }, 400);
+  await removeProviderConfig(env, accountId, provider as ProviderName);
+  return json({ ok: true });
+}
+
+async function handleSetOrder(request: Request, env: Env, accountId: string): Promise<Response> {
+  const data = await request.json<{ order?: { provider: string; model: string }[] }>().catch(() => null);
+  if (!data) return json({ error: "Ogiltig eller saknad JSON-data" }, 400);
+  const order = data.order ?? [];
+  for (const entry of order) {
+    if (!PROVIDER_NAMES.includes(entry.provider as ProviderName)) return json({ error: `Okänd leverantör: ${entry.provider}` }, 400);
+  }
+  await setOrder(env, accountId, order as { provider: ProviderName; model: string }[]);
+  return json({ ok: true });
+}
+
+interface UploadedFile {
+  name: string;
+  size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+async function handleUpload(request: Request, env: Env, accountId: string): Promise<Response> {
+  const form = await request.formData();
+  const entry = form.get("file");
+  if (typeof entry === "string" || !entry) return json({ error: "Ingen fil bifogad" }, 400);
+  const file = entry as unknown as UploadedFile;
+
+  const suffix = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
+  if (!file.name || !SUPPORTED_EXTENSIONS.includes(suffix)) {
+    return json({ error: `Filtyp måste vara en av: ${SUPPORTED_EXTENSIONS.sort().join(", ")}` }, 400);
+  }
+  if (file.size > MAX_UPLOAD_BYTES) return json({ error: "Filen är större än 50MB" }, 400);
+
+  const configured = await configuredProviders(env, accountId);
+  if (configured.length === 0) {
+    return json({ error: "Ingen AI-leverantör är konfigurerad. Lägg till en API-nyckel i inställningarna." }, 400);
+  }
+
+  const options = {
+    tone: String(form.get("tone") ?? ""),
+    length: String(form.get("length") ?? ""),
+    audience: String(form.get("audience") ?? ""),
+  };
+  const customDirection = String(form.get("custom_direction") ?? "");
+
+  const jobId = crypto.randomUUID().replace(/-/g, "");
+  const r2Key = `${accountId}/${jobId}${suffix}`;
+  await env.UPLOADS.put(r2Key, await file.arrayBuffer());
+  await createJob(env.DB, { id: jobId, accountId, filename: file.name, r2Key, options, customDirection });
+  await env.JOB_QUEUE.send({ type: "extract", jobId } satisfies JobMessage);
+
+  return json({ job_id: jobId });
+}
+
+async function handleListJobs(env: Env, accountId: string): Promise<Response> {
+  const jobs = await getJobsForAccount(env.DB, accountId);
+  return json(jobs.map(publicJob));
+}
+
+async function handleGetJob(env: Env, accountId: string, jobId: string): Promise<Response> {
+  const job = await getJob(env.DB, jobId);
+  if (!job || job.account_id !== accountId) return json({ error: "Hittar inte jobbet" }, 404);
+  return json(publicJob(job));
+}
+
+async function handleDownloadJob(env: Env, accountId: string, jobId: string): Promise<Response> {
+  const job = await getJob(env.DB, jobId);
+  if (!job || job.account_id !== accountId || !job.output_key) return json({ error: "Ingen fil att ladda ner" }, 404);
+  const obj = await env.UPLOADS.get(job.output_key);
+  if (!obj) return json({ error: "Filen hittades inte" }, 404);
+  const stem = job.filename.replace(/\.[^.]+$/, "");
+  return new Response(obj.body, {
+    headers: {
+      "content-type": "text/csv",
+      "content-disposition": `attachment; filename="${stem}_med_beskrivning.csv"`,
+    },
+  });
+}
+
+// Döljer interna fält (rows_json/partial_results_json kan vara stora och
+// innehåller mellanresultat som inte är menade att visas direkt).
+function publicJob(job: import("./db").Job) {
+  const { rows_json, partial_results_json, ...rest } = job as typeof job & { rows_json?: unknown; partial_results_json?: unknown };
+  return rest;
+}

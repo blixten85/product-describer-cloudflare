@@ -1,0 +1,82 @@
+* { box-sizing: border-box; }
+:root {
+  --bg: #0c0e14;
+  --card-bg: #13161f;
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #e4e2dc;
+  --hint: #6b7280;
+  --accent: #f0a500;
+  --accent-fg: #1a1200;
+  --error: #ef4444;
+  --ok: #4ade80;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px auto;
+  max-width: 700px;
+}
+.auth-card { max-width: 360px; margin-top: 80px; }
+h1 { font-size: 1.4rem; }
+h2 { font-size: 1.1rem; margin-bottom: 8px; }
+.hint { color: var(--hint); font-size: 0.9rem; }
+.error { color: var(--error); font-size: 0.9rem; }
+input, select, textarea, button {
+  width: 100%;
+  padding: 10px 12px;
+  margin: 6px 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+button {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  width: auto;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.link { text-align: center; }
+.header-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 700px;
+  margin: 20px auto 0;
+}
+.provider-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ok { color: var(--ok); }
+.muted { color: var(--hint); }
+#jobs-list { list-style: none; padding: 0; }
+.job-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}

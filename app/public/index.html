@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="sv" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Describer</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<section id="auth-view">
+  <div class="card auth-card">
+    <h1>Product Describer</h1>
+
+    <form id="login-form">
+      <h2>Logga in</h2>
+      <input type="email" name="email" placeholder="E-postadress" required>
+      <input type="password" name="password" placeholder="Lösenord" required>
+      <button type="submit">Logga in</button>
+      <p id="login-msg" class="error"></p>
+    </form>
+
+    <form id="signup-form" hidden>
+      <h2>Skapa konto</h2>
+      <input type="email" name="email" placeholder="E-postadress" required>
+      <input type="password" name="password" placeholder="Lösenord (minst 8 tecken)" required minlength="8">
+      <button type="submit">Skapa konto</button>
+      <p id="signup-msg" class="error"></p>
+    </form>
+
+    <p class="link"><button type="button" id="toggle-auth-btn" class="link-btn">Inget konto? Registrera dig</button></p>
+  </div>
+</section>
+
+<main id="app-view" hidden>
+  <nav class="header-links">
+    <h1>Product Describer</h1>
+    <button id="logout-btn" class="link-btn">Logga ut</button>
+  </nav>
+
+  <div class="card" id="settings-card">
+    <h2>AI-leverantörer</h2>
+    <p class="hint">Lägg till minst en API-nyckel för att kunna skicka in filer.</p>
+    <div id="provider-list"></div>
+
+    <details id="add-key-details">
+      <summary>Lägg till / uppdatera en nyckel</summary>
+      <select id="provider-select"></select>
+      <input type="text" id="api-key-input" placeholder="API-nyckel">
+      <div id="extra-fields"></div>
+      <button type="button" id="save-key-btn">Spara</button>
+      <p id="settings-msg"></p>
+    </details>
+  </div>
+
+  <div class="card" id="upload-card">
+    <h2>Ny körning</h2>
+    <p class="hint">CSV, Excel (.xlsx), .txt, .docx eller .pdf — max 50MB.</p>
+    <form id="upload-form">
+      <input type="file" id="file-input" accept=".csv,.xlsx,.txt,.docx,.pdf" required>
+
+      <label>Ton</label>
+      <select name="tone">
+        <option value="">Variera (standard)</option>
+        <option value="saklig">Saklig</option>
+        <option value="entusiastisk">Entusiastisk</option>
+        <option value="humoristisk">Humoristisk</option>
+        <option value="lyxig">Lyxig</option>
+      </select>
+
+      <label>Längd</label>
+      <select name="length">
+        <option value="medel">Medel (standard)</option>
+        <option value="kort">Kort</option>
+        <option value="lang">Lång</option>
+      </select>
+
+      <input type="text" name="audience" placeholder="Målgrupp (valfritt)">
+      <textarea name="custom_direction" placeholder="Extra instruktion (valfritt)" rows="2"></textarea>
+
+      <button type="submit" id="upload-submit-btn">Starta körning</button>
+      <p id="upload-msg" class="error"></p>
+    </form>
+  </div>
+
+  <div class="card" id="jobs-card">
+    <h2>Dina körningar</h2>
+    <ul id="jobs-list"></ul>
+  </div>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

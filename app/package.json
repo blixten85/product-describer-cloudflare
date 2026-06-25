@@ -1,0 +1,15 @@
+{
+  "name": "product-describer-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --remote",
+    "deploy": "wrangler deploy",
+    "secret:set-provider-key": "wrangler secret put PROVIDER_CONFIG_KEY"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,34 @@
+app:
+  - changed-files:
+    - any-glob-to-any-file: 'app/**'
+
+processor:
+  - changed-files:
+    - any-glob-to-any-file: 'processor/**'
+
+sync:
+  - changed-files:
+    - any-glob-to-any-file: 'sync/**'
+
+shared:
+  - changed-files:
+    - any-glob-to-any-file: 'shared/**'
+
+infra:
+  - changed-files:
+    - any-glob-to-any-file: 'infra/**'
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
+
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**.md'
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/package.json'
+      - '**/package-lock.json'

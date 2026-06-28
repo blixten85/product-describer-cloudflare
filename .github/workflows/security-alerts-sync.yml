@@ -14,10 +14,10 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch code scanning + Dependabot alerts
+      - name: Fetch code scanning + Dependabot alerts (PAT)
         uses: actions/github-script@v9
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.GH_TOKEN }}
           script: |
             const fs = require('fs');
             const { owner, repo } = context.repo;
@@ -43,7 +43,6 @@ jobs:
       - name: Sync open code scanning + Dependabot alerts to a pinned issue
         uses: actions/github-script@v9
         with:
-          github-token: ${{ github.token }}
           script: |
             const fs = require('fs');
             const { owner, repo } = context.repo;

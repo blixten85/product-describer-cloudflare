@@ -25,12 +25,17 @@ Tre Workers:
 
 `shared/` — kod gemensam för flera Workers (kryptering, AI-providers, prompts, kontoinställningar). OBS: `extractors.ts` ligger i `processor/src/` istället för `shared/` trots att den konceptuellt är delad logik — TypeScripts modulupplösning för tredjepartsbibliotek (xlsx/mammoth/unpdf) söker bara uppåt i katalogträdet, så filer i `shared/` (ett syskon till `processor/`) kan inte hitta paket som bara finns i `processor/node_modules`.
 
-## Känd, medvetet olöst skillnad mot Flask-versionen
+## Automatisk felrapportering
 
-`github_report.py`s automatiska felrapportering till GitHub-issues är INTE
-porterad — `sync/`/`processor/` loggar bara till `console.error`/`console.warn`
-(synligt via `wrangler tail`/dashboarden) istället. Kan läggas till senare
-om det visar sig behövas.
+`github_report.py` är porterad till `shared/github-report.ts`: oväntade
+driftfel i `processor/` (kö-konsumentens topp-catch) och `sync/` (scraper-
+hämtning + tillbakaskrivning) öppnar en `@claude`-taggad GitHub-issue, med
+samma sanering (env-hemligheter, nyckelmönster, e-post, home-paths) och
+avdubblering via fingeravtryck som Flask-versionen. No-op om secreten
+`GITHUB_ERROR_REPORT_TOKEN` saknas — då loggas felen bara till
+`console.error`/`console.warn` (synligt via `wrangler tail`/dashboarden).
+Ingen in-memory-throttle som i Flask: Workers-isolat är kortlivade och delar
+inte minne, så GitHub-sidans avdubblering är enda spärren.
 
 ## Sätta upp lokalt
 
@@ -67,6 +72,7 @@ cd app && npx wrangler secret put PROVIDER_CONFIG_KEY && npx wrangler deploy
 cd ../processor && npx wrangler secret put PROVIDER_CONFIG_KEY && npx wrangler deploy   # samma värde som ovan
 cd ../sync && npx wrangler secret put SCRAPER_API_KEY
 npx wrangler secret put ANTHROPIC_API_KEY   # och/eller OPENAI_API_KEY/GEMINI_API_KEY
+npx wrangler secret put GITHUB_ERROR_REPORT_TOKEN   # valfritt: auto-felrapportering (även i processor/)
 npx wrangler deploy
 ```
 

@@ -1,1 +1,3 @@
 PROVIDER_CONFIG_KEY="generera-med: openssl rand -base64 32"
+# Valfritt: fine-grained GitHub-PAT med Issues:Write för auto-felrapportering.
+# GITHUB_ERROR_REPORT_TOKEN=""

@@ -11,8 +11,9 @@
 
 import { ProviderChain, AllProvidersExhausted, DEFAULT_MODELS, type ProviderSpec, type ProviderName } from "../../shared/providers";
 import { buildSystemPrompt, userMessage } from "../../shared/prompts";
+import { reportErrorToGitHub, type GitHubReportEnv } from "../../shared/github-report";
 
-interface Env {
+interface Env extends GitHubReportEnv {
   SCRAPER_URL: string;
   SCRAPER_API_KEY: string;
   ANTHROPIC_API_KEY?: string;
@@ -24,6 +25,8 @@ interface Env {
   SYNC_LIMIT?: string; // default 50, motsvarar --limit
   SYNC_WORKERS?: string; // default 2, motsvarar --workers (parallella AI-anrop per cykel)
 }
+
+const REPO = "blixten85/product-describer-cloudflare";
 
 interface Product {
   id: number;
@@ -95,6 +98,7 @@ async function processOne(chain: ProviderChain, product: Product, env: Env): Pro
     console.log(`Beskrev produkt ${product.id}`);
   } catch (err) {
     console.error(`Kunde inte spara beskrivning för ${product.id}:`, err);
+    await reportErrorToGitHub(REPO, "Sync: kunde inte spara beskrivning", err, env, { product_id: String(product.id) });
   }
 }
 
@@ -112,6 +116,7 @@ export default {
       products = await fetchProductsMissingDescription(env, limit);
     } catch (err) {
       console.error("Kunde inte hämta från scrapern:", err);
+      await reportErrorToGitHub(REPO, "Sync: kunde inte hämta från scrapern", err, env);
       return;
     }
 

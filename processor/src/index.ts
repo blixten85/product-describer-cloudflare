@@ -15,8 +15,9 @@ import { buildChain, type ProviderConfigEnv } from "../../shared/provider-config
 import { extractRows, ExtractionError, type ExtractedRows } from "./extractors";
 import { buildSystemPrompt, userMessage } from "../../shared/prompts";
 import { AllProvidersExhausted } from "../../shared/providers";
+import { reportErrorToGitHub, type GitHubReportEnv } from "../../shared/github-report";
 
-interface Env extends ProviderConfigEnv {
+interface Env extends ProviderConfigEnv, GitHubReportEnv {
   UPLOADS: R2Bucket;
   JOB_QUEUE: Queue<JobMessage>;
 }
@@ -49,6 +50,13 @@ export default {
         // Ej AllProvidersExhausted (hanteras separat nedan, med retry) — ett
         // oväntat fel ska inte kunna fastna i en oändlig kö-retry-loop.
         console.error(`jobId=${msg.body.jobId} type=${msg.body.type} misslyckades:`, err);
+        await reportErrorToGitHub(
+          "blixten85/product-describer-cloudflare",
+          `Processor: ${msg.body.type} misslyckades`,
+          err,
+          env,
+          { jobId: msg.body.jobId, type: msg.body.type },
+        );
         msg.ack();
       }
     }

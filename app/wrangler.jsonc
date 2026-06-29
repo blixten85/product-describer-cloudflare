@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "product_describer",
-      "database_id": "TBD"
+      "database_id": "f1301925-95c3-47c7-b513-a25d4cfaf881"
     }
   ],
   "r2_buckets": [
@@ -25,7 +25,7 @@
   "kv_namespaces": [
     {
       "binding": "SESSIONS",
-      "id": "TBD"
+      "id": "adafd9ea9ec24bc8ab8da87ff80467cc"
     }
   ],
   "queues": {

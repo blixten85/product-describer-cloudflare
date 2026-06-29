@@ -9,6 +9,13 @@
   "vars": {
     // scraper-API:et tunnlas publikt här (löst 2026-06-25), skyddat av
     // X-API-Key (secret SCRAPER_API_KEY, satt via wrangler secret put).
-    "SCRAPER_URL": "https://scraper-api.denied.se"
+    "SCRAPER_URL": "https://scraper-api.denied.se",
+    // Gemini-only-körning på gratis-tier för att beta av ~32k-backloggen
+    // utan kostnad (inga ANTHROPIC/OPENAI-secrets satta → ingen betald
+    // fallback). Lågt SYNC_LIMIT håller varje cykel under Free-planens
+    // 50-subrequest-tak (10×(AI+PUT)+GET ≈ 21) och dämpar RPM mot Geminis
+    // gratis-kvot; kedjan självstryper vid 429 och tar resten nästa cykel.
+    "SYNC_LIMIT": "10",
+    "SYNC_WORKERS": "2"
   }
 }

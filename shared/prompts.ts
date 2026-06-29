@@ -54,6 +54,10 @@ export function buildSystemPrompt(options: PromptOptions = {}, customDirection =
   return parts.join("\n");
 }
 
-export function userMessage(site: string, product: string, price: string): string {
-  return `Produkt: ${product}\nButik: ${site}\nPris: ${price} kr`;
+export function userMessage(site: string, product: string, price: string, category = ""): string {
+  const lines = [`Produkt: ${product}`];
+  if (category.trim()) lines.push(`Kategori: ${category.trim()}`);
+  lines.push(`Butik: ${site}`);
+  lines.push(`Pris: ${price} kr`);
+  return lines.join("\n");
 }

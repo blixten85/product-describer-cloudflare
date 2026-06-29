@@ -33,6 +33,7 @@ interface Product {
   title: string;
   url?: string;
   category?: string;
+  source_text?: string;
 }
 
 function buildChainFromEnv(env: Env): ProviderChain | null {
@@ -81,7 +82,7 @@ async function processOne(chain: ProviderChain, product: Product, env: Env): Pro
   let parts: { beskrivning: string; varför: string };
   try {
     const systemPrompt = buildSystemPrompt();
-    parts = await chain.generate(systemPrompt, userMessage("", product.title, "", product.category ?? ""));
+    parts = await chain.generate(systemPrompt, userMessage("", product.title, "", product.category ?? "", product.source_text ?? ""));
   } catch (err) {
     if (err instanceof AllProvidersExhausted) {
       console.warn(`Alla leverantörer uttömda, försöker igen efter ${err.resumeAt.toISOString()}`);

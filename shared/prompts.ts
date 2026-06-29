@@ -13,6 +13,7 @@ const BASE_PROMPT = [
   '{"beskrivning": "...", "varför": "..."}',
   "- 'beskrivning' (1–2 meningar): kort, naturlig beskrivning av produkten.",
   "- 'varför' (1–2 meningar): varför någon skulle vilja eller behöva produkten.",
+  "Om 'Produktinfo' eller 'Kategori' anges: grunda beskrivningen på den och hitta INTE på egenskaper som inte framgår.",
 ].join("\n");
 
 const TONE_INSTRUCTIONS: Record<string, string> = {
@@ -54,9 +55,16 @@ export function buildSystemPrompt(options: PromptOptions = {}, customDirection =
   return parts.join("\n");
 }
 
-export function userMessage(site: string, product: string, price: string, category = ""): string {
+export function userMessage(
+  site: string,
+  product: string,
+  price: string,
+  category = "",
+  sourceText = "",
+): string {
   const lines = [`Produkt: ${product}`];
   if (category.trim()) lines.push(`Kategori: ${category.trim()}`);
+  if (sourceText.trim()) lines.push(`Produktinfo: ${sourceText.trim()}`);
   lines.push(`Butik: ${site}`);
   lines.push(`Pris: ${price} kr`);
   return lines.join("\n");

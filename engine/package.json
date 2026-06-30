@@ -1,0 +1,16 @@
+{
+  "name": "product-describer-engine",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --remote",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "secret:set-ingest-key": "wrangler secret put INGEST_API_KEY"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.0.0"
+  }
+}

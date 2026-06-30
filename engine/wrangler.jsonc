@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "product-describer-engine",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  // Fas 1: bara HTTP-endpoints (lease/result/ingest) som fetchern på servern
+  // anropar. Cron (schemaläggning + beskriv-loop) läggs till i Fas 4 — då
+  // tillkommer "triggers": { "crons": ["*/5 * * * *"] } och EN scheduled()-handler.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "product_describer",
+      "database_id": "f1301925-95c3-47c7-b513-a25d4cfaf881"
+    }
+  ]
+  // Secret: INGEST_API_KEY (operatörsnyckel) — sätts via `wrangler secret put INGEST_API_KEY`.
+}

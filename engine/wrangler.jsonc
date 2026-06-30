@@ -6,6 +6,12 @@
   // Fas 1: bara HTTP-endpoints (lease/result/ingest) som fetchern på servern
   // anropar. Cron (schemaläggning + beskriv-loop) läggs till i Fas 4 — då
   // tillkommer "triggers": { "crons": ["*/5 * * * *"] } och EN scheduled()-handler.
+  // Custom domain — kontots workers.dev blockeras (403/1050); övriga Workers
+  // använder också custom domains (product-describer.denied.se, politiker.denied.se).
+  // Skyddas av X-API-Key i koden (ingen Cloudflare Access), som dagens scraper-API.
+  "routes": [
+    { "pattern": "engine.denied.se", "custom_domain": true }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

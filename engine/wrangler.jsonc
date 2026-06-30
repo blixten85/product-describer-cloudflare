@@ -3,9 +3,17 @@
   "name": "product-describer-engine",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
-  // Fas 1: bara HTTP-endpoints (lease/result/ingest) som fetchern på servern
-  // anropar. Cron (schemaläggning + beskriv-loop) läggs till i Fas 4 — då
-  // tillkommer "triggers": { "crons": ["*/5 * * * *"] } och EN scheduled()-handler.
+  // EN cron (*/5), EN scheduled()-handler som per tick: återställer utgångna
+  // leases -> schemalägger detail-jobb för produkter utan source_text ->
+  // beskriver produkter utan description (Gemini/Haiku). Allt cappat per tick.
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "SCHEDULE_LIMIT": "200", // max detail-jobb att skapa per tick
+    "DESCRIBE_LIMIT": "10", // max produkter att beskriva per tick (lågt = under gratis-RPM)
+    "DESCRIBE_WORKERS": "2" // parallella AI-anrop
+  },
   // Custom domain — kontots workers.dev blockeras (403/1050); övriga Workers
   // använder också custom domains (product-describer.denied.se, politiker.denied.se).
   // Skyddas av X-API-Key i koden (ingen Cloudflare Access), som dagens scraper-API.
@@ -19,5 +27,9 @@
       "database_id": "f1301925-95c3-47c7-b513-a25d4cfaf881"
     }
   ]
-  // Secret: INGEST_API_KEY (operatörsnyckel) — sätts via `wrangler secret put INGEST_API_KEY`.
+  // Secrets (wrangler secret put):
+  //   INGEST_API_KEY  — operatörsnyckel för fetcher-endpoints (X-API-Key)
+  //   GEMINI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / AZURE_* — AI-leverantörer
+  //   för beskriv-steget (minst en krävs, annars hoppas det över). Gemini-only =
+  //   gratis-tier, samma upplägg som sync-Workern.
 }

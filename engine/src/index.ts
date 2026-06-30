@@ -1,8 +1,12 @@
-// product-describer-engine — Fas 1 av den enhetliga arkitekturen (se DESIGN.md).
+// product-describer-engine — hjärnan i den enhetliga arkitekturen (se DESIGN.md).
 //
 // Cloudflare blir sanningskälla; servern krymps till en statslös Playwright-
-// fetcher som BARA gör utgående HTTPS. Den här Workern exponerar de endpoints
-// fetchern behöver:
+// fetcher som BARA gör utgående HTTPS. Den här Workern gör två saker:
+//
+//  A) HTTP-endpoints som fetchern anropar (Fas 1).
+//  B) EN cron-handler (Fas 4) som driver hela katalog-loopen mot D1.
+//
+// Endpoints fetchern behöver:
 //
 //   POST /jobs/lease        — leasa N render-jobb (lease/ack, ersätter Queues)
 //   POST /jobs/:id/result   — rapportera resultat: upsert produkt + prishistorik,
@@ -13,10 +17,34 @@
 // Auth: X-API-Key mot secret INGEST_API_KEY (operatörsnyckel), samma mönster
 // som dagens scraper-API. Inget per konto — katalogen är operatörs-ägd.
 
-interface Env {
+import {
+  ProviderChain,
+  AllProvidersExhausted,
+  DEFAULT_MODELS,
+  type ProviderSpec,
+  type ProviderName,
+} from "../../shared/providers";
+import { buildSystemPrompt, userMessage } from "../../shared/prompts";
+import { reportErrorToGitHub, type GitHubReportEnv } from "../../shared/github-report";
+
+interface Env extends GitHubReportEnv {
   DB: D1Database;
   INGEST_API_KEY: string;
+  // AI-leverantörer (Wrangler secrets) — samma som sync-Workern. Operatörens
+  // egna nycklar, inte kontobaserat.
+  ANTHROPIC_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  AZURE_OPENAI_API_KEY?: string;
+  AZURE_OPENAI_ENDPOINT?: string;
+  AZURE_OPENAI_DEPLOYMENT?: string;
+  // Cron-tak per tick (vars i wrangler.jsonc).
+  SCHEDULE_LIMIT?: string; // max detail-jobb att skapa per tick (default 200)
+  DESCRIBE_LIMIT?: string; // max produkter att beskriva per tick (default 10)
+  DESCRIBE_WORKERS?: string; // parallella AI-anrop (default 2)
 }
+
+const REPO = "blixten85/product-describer-cloudflare";
 
 const LEASE_MS = 120_000; // hur länge ett leasat jobb är "ägt" innan det kan återtas
 const MAX_ATTEMPTS = 5; // efter så många misslyckanden -> status='error'
@@ -221,7 +249,139 @@ async function ingest(req: Request, env: Env): Promise<Response> {
   return json({ upserted: stmts.length });
 }
 
+// ── Cron-handlerns hjälpfunktioner ──────────────────────────────────────────
+
+// Bygger leverantörskedjan ur miljövariabler — samma som sync-Workern.
+function buildChainFromEnv(env: Env): ProviderChain | null {
+  const specs: ProviderSpec[] = [];
+  const keys: Record<ProviderName, string | undefined> = {
+    anthropic: env.ANTHROPIC_API_KEY,
+    openai: env.OPENAI_API_KEY,
+    gemini: env.GEMINI_API_KEY,
+    azure_openai: env.AZURE_OPENAI_API_KEY,
+  };
+  for (const [name, apiKey] of Object.entries(keys) as [ProviderName, string | undefined][]) {
+    if (!apiKey) continue;
+    if (name === "azure_openai") {
+      if (!env.AZURE_OPENAI_ENDPOINT || !env.AZURE_OPENAI_DEPLOYMENT) continue;
+      specs.push({
+        provider: name,
+        creds: { apiKey, endpoint: env.AZURE_OPENAI_ENDPOINT, deployment: env.AZURE_OPENAI_DEPLOYMENT },
+        model: env.AZURE_OPENAI_DEPLOYMENT,
+      });
+      continue;
+    }
+    specs.push({ provider: name, creds: { apiKey }, model: DEFAULT_MODELS[name][0] });
+  }
+  return specs.length > 0 ? new ProviderChain(specs) : null;
+}
+
+// 1. Utgångna leases -> pending (självläkande om fetchern dog mitt i ett jobb).
+async function reclaimLeases(env: Env, now: number): Promise<number> {
+  const r = await env.DB.prepare(
+    "UPDATE render_jobs SET status='pending', updated_at=?1 WHERE status='leased' AND lease_until < ?1",
+  )
+    .bind(now)
+    .run();
+  return r.meta.changes ?? 0;
+}
+
+// 2. Skapa detail-jobb för produkter som saknar source_text och inte redan har
+//    ett aktivt jobb. Cappat per tick.
+async function scheduleDetailJobs(env: Env, now: number, limit: number): Promise<number> {
+  const r = await env.DB.prepare(
+    `INSERT INTO render_jobs (url, site_id, type, status, created_at, updated_at)
+     SELECT p.url, p.site_id, 'detail', 'pending', ?1, ?1 FROM products p
+     WHERE p.source_text IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM render_jobs rj
+         WHERE rj.url = p.url AND rj.type = 'detail' AND rj.status IN ('pending','leased')
+       )
+     LIMIT ?2`,
+  )
+    .bind(now, limit)
+    .run();
+  return r.meta.changes ?? 0;
+}
+
+// 3. Beskriv N produkter som saknar description (helst de med source_text att
+//    grunda sig på). Återanvänder shared/ — exakt samma motor som sync.
+async function describeMissing(
+  env: Env,
+  chain: ProviderChain,
+  now: number,
+  limit: number,
+  concurrency: number,
+): Promise<number> {
+  const sel = await env.DB.prepare(
+    `SELECT id, title, category, source_text FROM products
+     WHERE description IS NULL
+     ORDER BY (source_text IS NOT NULL) DESC, id
+     LIMIT ?1`,
+  )
+    .bind(limit)
+    .all<{ id: number; title: string | null; category: string | null; source_text: string | null }>();
+  const products = sel.results ?? [];
+  if (products.length === 0) return 0;
+
+  let done = 0;
+  const system = buildSystemPrompt();
+  for (let i = 0; i < products.length; i += concurrency) {
+    const batch = products.slice(i, i + concurrency);
+    await Promise.all(
+      batch.map(async (p) => {
+        let parts: { beskrivning: string; varför: string };
+        try {
+          parts = await chain.generate(
+            system,
+            userMessage("", p.title ?? "", "", p.category ?? "", p.source_text ?? ""),
+          );
+        } catch (err) {
+          if (err instanceof AllProvidersExhausted) return; // tas av nästa tick
+          console.warn(`Hoppar över produkt ${p.id}:`, err);
+          return;
+        }
+        if (!parts.beskrivning) return;
+        await env.DB.prepare(
+          "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3 WHERE id=?4",
+        )
+          .bind(parts.beskrivning, parts.varför, now, p.id)
+          .run();
+        done++;
+      }),
+    );
+  }
+  return done;
+}
+
 export default {
+  // EN cron-trigger (*/5), EN handler som gör allt sekventiellt och cappat per
+  // tick (DESIGN.md §4.4). Inga flera cronjobb att koordinera.
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    const now = Date.now();
+    try {
+      const reclaimed = await reclaimLeases(env, now);
+      const scheduled = await scheduleDetailJobs(env, now, Number(env.SCHEDULE_LIMIT) || 200);
+      let described = 0;
+      const chain = buildChainFromEnv(env);
+      if (chain) {
+        described = await describeMissing(
+          env,
+          chain,
+          now,
+          Number(env.DESCRIBE_LIMIT) || 10,
+          Number(env.DESCRIBE_WORKERS) || 2,
+        );
+      } else {
+        console.warn("Ingen AI-leverantör konfigurerad — hoppar över beskriv-steget.");
+      }
+      console.log(`cron: reclaimed=${reclaimed} scheduled=${scheduled} described=${described}`);
+    } catch (err) {
+      console.error("cron misslyckades:", err);
+      await reportErrorToGitHub(REPO, "Engine cron misslyckades", err, env);
+    }
+  },
+
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;

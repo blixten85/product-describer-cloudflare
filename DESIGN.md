@@ -116,10 +116,23 @@ CREATE TABLE alert_cooldown ( product_id INTEGER PRIMARY KEY REFERENCES products
 - Befintliga upload-/describe-rutter orörda.
 - Auth: `X-API-Key` (operatörsnyckel, som dagens scraper-API).
 
-### 4.4 Cron (var 5:e min, ersätter `scraper.py`-loop + dagens `sync`)
-1. **Schemalägg:** för varje aktivt `site` vars intervall löpt ut → skapa `list`-render-jobb. För `products` med `source_text IS NULL` → skapa `detail`-jobb (rate-limitat antal per cykel).
-2. **Beskriv:** ta N `products` med `description IS NULL` (helst där `source_text IS NOT NULL`), generera via Gemini/Haiku, skriv tillbaka. (Detta är dagens `sync`, men mot D1 i stället för scraper-API.)
-3. **Städa:** utgångna leases (`leased` + `lease_until<now`) → tillbaka till `pending` (resumabelt om fetchern dör).
+### 4.4 Cron — EN trigger, EN handler (ersätter `scraper.py`-loop + dagens `sync`)
+**Ett enda Cron Trigger (`*/5 * * * *`)** och **en `scheduled()`-handler** som kör
+alla periodiska uppgifter sekventiellt per tick — inga flera cronjobb att koordinera:
+
+```
+scheduled() {                 // körs var 5:e minut
+  1. reclaimExpiredLeases()   // 'leased' + lease_until<now  -> 'pending' (självläkande)
+  2. scheduleDueCrawls()      // sites vars intervall löpt ut -> 'list'-jobb;
+                              //   products med source_text IS NULL -> 'detail'-jobb   (cap M/tick)
+  3. describeMissing()        // N products med description IS NULL, helst source_text IS NOT NULL,
+                              //   via Gemini/Haiku -> skriv tillbaka                  (cap N/tick)
+}
+```
+
+Varje steg är **cappat per tick** (M, N) så en invocation håller sig inom Workers
+CPU-/tids- och subrequest-gränserna; resten tas av nästa tick (inkrementellt, precis
+som dagens `sync`). Allt på ett ställe, ett schema.
 
 ## 5. Kostnad (operatörens hårda noll-regel)
 - **Playwright stannar lokalt** → ingen Browser Rendering-kostnad.

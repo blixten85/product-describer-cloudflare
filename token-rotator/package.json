@@ -1,0 +1,15 @@
+{
+  "name": "cf-token-rotator",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "secret:set-admin": "wrangler secret put CF_ADMIN_TOKEN"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.0.0"
+  }
+}

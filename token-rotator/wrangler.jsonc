@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-token-rotator",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  // Cron-only — ingen HTTP-route (minimal attackyta för en Worker som bär
+  // admin-token). Kör dagligen 03:17 UTC och förlänger CF-tokens nära utgång.
+  // Gör token-hygienen självgående på Cloudflare: överlever att mp100/operatören
+  // försvinner (till skillnad från ~/.claude-admin/rotate-keys.py som kör på servern).
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
+  "workers_dev": false, // ingen HTTP-yta — bara cron
+  "preview_urls": false,
+  "vars": {
+    "CF_ACCOUNT_ID": "b74f8c0c6a92f3006483840cf27372fd",
+    "THRESHOLD_DAYS": "30", // förläng tokens inom så här många dagar från utgång
+    "EXTEND_DAYS": "365" // ny livslängd
+  }
+  // Secret (wrangler secret put): CF_ADMIN_TOKEN — admin "manage-tokens"-token
+  // (Account API Tokens Write). Kan förlänga alla kontots tokens inkl. sig själv
+  // -> självförevigande så länge Workern kör och kontot är aktivt.
+}

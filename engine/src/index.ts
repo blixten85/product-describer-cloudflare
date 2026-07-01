@@ -95,7 +95,9 @@ async function leaseJobs(req: Request, env: Env): Promise<Response> {
      WHERE id IN (
        SELECT id FROM render_jobs
        WHERE status = 'pending' OR (status = 'leased' AND lease_until < ?2)
-       ORDER BY id LIMIT ?3
+       -- List-jobb (crawl) prioriteras: de är få och tidskänsliga (färska priser/
+       -- upptäckt) och ska inte svältas bakom en lång detail-backlog.
+       ORDER BY CASE type WHEN 'list' THEN 0 ELSE 1 END, id LIMIT ?3
      )
      RETURNING id, url, type, site_id`,
   )

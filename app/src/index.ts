@@ -5,6 +5,7 @@
 
 import { signup, login, logout, requireAccount } from "./auth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
+import { searchCatalog, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
 import {
   configuredProviders,
   getProviderConfig,
@@ -47,9 +48,16 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   if (pathname === "/login" && request.method === "POST") return handleLogin(request, env);
   if (pathname === "/logout" && request.method === "POST") return handleLogout(request, env);
 
-  // Allt annat under /api/* kräver inloggning.
+  // Allt annat under /api/* (och /underlag) kräver inloggning.
   const account = await requireAccount(env, request);
   if (!account) return json({ error: "Inte inloggad" }, 401);
+
+  // Utskrivbart bistånds-underlag (server-renderad HTML, öppnas i ny flik).
+  if (pathname === "/underlag" && request.method === "GET") {
+    return new Response(await renderUnderlag(env, account), {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
 
   if (pathname === "/api/status" && request.method === "GET") return handleStatus(env, account.id);
   if (pathname === "/api/settings" && request.method === "GET") return handleGetSettings(env, account.id);
@@ -66,11 +74,34 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     return jobMatch[2] ? handleDownloadJob(env, account.id, jobMatch[1]) : handleGetJob(env, account.id, jobMatch[1]);
   }
 
+  // Bistånds-underlag: katalog-sök + kontots valda produkter med motivering.
+  if (pathname === "/api/catalog" && request.method === "GET") {
+    return json(await searchCatalog(env, url.searchParams.get("q") ?? ""));
+  }
+  if (pathname === "/api/bistand" && request.method === "GET") return json(await listBistand(env, account.id));
+  if (pathname === "/api/bistand" && request.method === "POST") return handleAddBistand(request, env, account.id);
+  const bistandMatch = pathname.match(/^\/api\/bistand\/(\d+)$/);
+  if (bistandMatch && request.method === "DELETE") {
+    await removeBistand(env, account.id, Number(bistandMatch[1]));
+    return json({ ok: true });
+  }
+
   return json({ error: "Hittar inte" }, 404);
 }
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+async function handleAddBistand(request: Request, env: Env, accountId: string): Promise<Response> {
+  const data = await request
+    .json<{ product_id?: number; motivation?: string }>()
+    .catch(() => ({}) as { product_id?: number; motivation?: string });
+  const productId = Number(data.product_id);
+  if (!Number.isInteger(productId) || productId <= 0) return json({ error: "Ogiltig produkt" }, 400);
+  const ok = await upsertBistand(env, accountId, productId, (data.motivation ?? "").trim());
+  if (!ok) return json({ error: "Produkten finns inte" }, 404);
+  return json({ ok: true });
 }
 
 function withSessionCookie(body: unknown, sessionToken: string): Response {

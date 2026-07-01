@@ -423,54 +423,58 @@ async function scheduleDueCrawls(env: Env, now: number): Promise<number> {
   return sites.length;
 }
 
-// 3. Beskriv N produkter som saknar description (helst de med source_text att
-//    grunda sig på). Återanvänder shared/ — exakt samma motor som sync.
-async function describeMissing(
-  env: Env,
-  chain: ProviderChain,
-  now: number,
-  limit: number,
-  concurrency: number,
-): Promise<number> {
-  const sel = await env.DB.prepare(
-    `SELECT id, title, category, source_text FROM products
-     WHERE description IS NULL
-     ORDER BY (source_text IS NOT NULL) DESC, id
-     LIMIT ?1`,
-  )
-    .bind(limit)
-    .all<{ id: number; title: string | null; category: string | null; source_text: string | null }>();
-  const products = sel.results ?? [];
-  if (products.length === 0) return 0;
+// On-demand-beskrivning (POST /describe). Katalogen har ~32k produkter; att
+// förbeskriva alla ryms inte i gratis-Geminis kvot. I stället beskrivs en
+// produkt först när den faktiskt visas/väljs (app-Workern anropar hit) och
+// cachas i D1. Redan cachad -> returneras direkt utan API-anrop.
+interface ProductRow {
+  id: number;
+  title: string | null;
+  category: string | null;
+  source_text: string | null;
+  description: string | null;
+  description_why: string | null;
+}
 
-  let done = 0;
-  const system = buildSystemPrompt();
-  for (let i = 0; i < products.length; i += concurrency) {
-    const batch = products.slice(i, i + concurrency);
-    await Promise.all(
-      batch.map(async (p) => {
-        let parts: { beskrivning: string; varför: string };
-        try {
-          parts = await chain.generate(
-            system,
-            userMessage("", p.title ?? "", "", p.category ?? "", p.source_text ?? ""),
-          );
-        } catch (err) {
-          if (err instanceof AllProvidersExhausted) return; // tas av nästa tick
-          console.warn(`Hoppar över produkt ${p.id}:`, err);
-          return;
-        }
-        if (!parts.beskrivning) return;
-        await env.DB.prepare(
-          "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3 WHERE id=?4",
-        )
-          .bind(parts.beskrivning, parts.varför, now, p.id)
-          .run();
-        done++;
-      }),
-    );
+async function describeProduct(req: Request, env: Env): Promise<Response> {
+  const body = (await req.json().catch(() => ({}))) as { url?: string; id?: number; refresh?: boolean };
+  const where = body.url != null ? "url = ?1" : "id = ?1";
+  const key = body.url ?? body.id;
+  if (key == null) return json({ error: "url eller id krävs" }, 400);
+
+  const p = await env.DB.prepare(
+    `SELECT id, title, category, source_text, description, description_why FROM products WHERE ${where}`,
+  )
+    .bind(key)
+    .first<ProductRow>();
+  if (!p) return json({ error: "produkt finns inte" }, 404);
+
+  // Cache-träff: returnera direkt (om inte refresh begärs).
+  if (p.description && !body.refresh) {
+    return json({ beskrivning: p.description, varför: p.description_why ?? "", cached: true });
   }
-  return done;
+
+  const chain = buildChainFromEnv(env);
+  if (!chain) return json({ error: "ingen AI-leverantör konfigurerad" }, 503);
+
+  let parts: { beskrivning: string; varför: string };
+  try {
+    parts = await chain.generate(
+      buildSystemPrompt(),
+      userMessage("", p.title ?? "", "", p.category ?? "", p.source_text ?? ""),
+    );
+  } catch (err) {
+    if (err instanceof AllProvidersExhausted) return json({ error: "AI-kvot tillfälligt slut, försök snart igen" }, 429);
+    return json({ error: err instanceof Error ? err.message : "beskrivning misslyckades" }, 502);
+  }
+  if (!parts.beskrivning) return json({ error: "tomt svar från AI" }, 502);
+
+  await env.DB.prepare(
+    "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3 WHERE id=?4",
+  )
+    .bind(parts.beskrivning, parts.varför, Date.now(), p.id)
+    .run();
+  return json({ beskrivning: parts.beskrivning, varför: parts.varför, cached: false });
 }
 
 export default {
@@ -479,23 +483,13 @@ export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     const now = Date.now();
     try {
+      // Beskrivning sker INTE här längre — den är on-demand (POST /describe),
+      // eftersom gratis-Geminis kvot inte räcker för att förbeskriva ~32k
+      // produkter. Cronen sköter bara crawl/discovery + source_text-jobb.
       const reclaimed = await reclaimLeases(env, now);
       const crawls = await scheduleDueCrawls(env, now);
       const scheduled = await scheduleDetailJobs(env, now, Number(env.SCHEDULE_LIMIT) || 200);
-      let described = 0;
-      const chain = buildChainFromEnv(env);
-      if (chain) {
-        described = await describeMissing(
-          env,
-          chain,
-          now,
-          Number(env.DESCRIBE_LIMIT) || 10,
-          Number(env.DESCRIBE_WORKERS) || 2,
-        );
-      } else {
-        console.warn("Ingen AI-leverantör konfigurerad — hoppar över beskriv-steget.");
-      }
-      console.log(`cron: reclaimed=${reclaimed} crawls=${crawls} scheduled=${scheduled} described=${described}`);
+      console.log(`cron: reclaimed=${reclaimed} crawls=${crawls} scheduled=${scheduled}`);
     } catch (err) {
       console.error("cron misslyckades:", err);
       await reportErrorToGitHub(REPO, "Engine cron misslyckades", err, env);
@@ -513,6 +507,7 @@ export default {
     try {
       if (req.method === "POST" && path === "/jobs/lease") return await leaseJobs(req, env);
       if (req.method === "POST" && path === "/ingest") return await ingest(req, env);
+      if (req.method === "POST" && path === "/describe") return await describeProduct(req, env);
 
       const m = path.match(/^\/jobs\/(\d+)\/result$/);
       if (req.method === "POST" && m) return await reportResult(Number(m[1]), req, env);

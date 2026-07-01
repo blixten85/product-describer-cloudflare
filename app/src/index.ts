@@ -6,6 +6,7 @@
 import { signup, login, logout, requireAccount } from "./auth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
 import { searchCatalog, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
+import { getProduct, describeViaEngine } from "./catalog";
 import {
   configuredProviders,
   getProviderConfig,
@@ -76,7 +77,17 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
 
   // Bistånds-underlag: katalog-sök + kontots valda produkter med motivering.
   if (pathname === "/api/catalog" && request.method === "GET") {
-    return json(await searchCatalog(env, url.searchParams.get("q") ?? ""));
+    return json(await searchCatalog(env, url.searchParams.get("q") ?? "", Number(url.searchParams.get("offset")) || 0));
+  }
+  const prodMatch = pathname.match(/^\/api\/produkt\/(\d+)$/);
+  if (prodMatch && request.method === "GET") {
+    const p = await getProduct(env, Number(prodMatch[1]));
+    return p ? json(p) : json({ error: "Produkten finns inte" }, 404);
+  }
+  const descMatch = pathname.match(/^\/api\/produkt\/(\d+)\/describe$/);
+  if (descMatch && request.method === "POST") {
+    const { status, ...body } = await describeViaEngine(env, Number(descMatch[1]));
+    return json(body, status);
   }
   if (pathname === "/api/bistand" && request.method === "GET") return json(await listBistand(env, account.id));
   if (pathname === "/api/bistand" && request.method === "POST") return handleAddBistand(request, env, account.id);

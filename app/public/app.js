@@ -287,6 +287,130 @@ setInterval(() => {
   if (!document.getElementById("app-view").hidden) loadJobs();
 }, 5000);
 
+// ── Avdelningar (hamburgermeny) ───────────────────────────────────────────
+
+function showDept(name) {
+  for (const s of document.querySelectorAll(".dept")) s.hidden = s.id !== `dept-${name}`;
+  document.getElementById("dept-drawer").hidden = true;
+  if (name === "katalog" && !catalogLoaded) loadCatalog();
+}
+
+document.getElementById("hamburger-btn").addEventListener("click", () => {
+  const d = document.getElementById("dept-drawer");
+  d.hidden = !d.hidden;
+});
+for (const btn of document.querySelectorAll(".dept-link")) {
+  btn.addEventListener("click", () => showDept(btn.dataset.dept));
+}
+
+// ── Katalog (Avd. B) ──────────────────────────────────────────────────────
+
+let catalogLoaded = false;
+const catState = { q: "", offset: 0 };
+const CAT_PAGE = 30;
+
+async function loadCatalog() {
+  catalogLoaded = true;
+  const rows = await api(`/api/catalog?q=${encodeURIComponent(catState.q)}&offset=${catState.offset}`);
+  const list = document.getElementById("cat-results");
+  list.innerHTML = "";
+  for (const p of rows) {
+    const li = document.createElement("li");
+    li.className = "catalog-row";
+    li.innerHTML = `<span><strong>${escapeHtml(p.title ?? "(namnlös)")}</strong> — ${formatPrice(p.current_price)}${p.description ? " ✓" : ""}</span>`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "link-btn";
+    btn.textContent = "Visa";
+    btn.onclick = () => openProduct(p.id);
+    li.appendChild(btn);
+    list.appendChild(li);
+  }
+  document.getElementById("cat-prev").hidden = catState.offset === 0;
+  document.getElementById("cat-next").hidden = rows.length < CAT_PAGE;
+}
+
+document.getElementById("cat-search-btn").addEventListener("click", () => {
+  catState.q = document.getElementById("cat-q").value;
+  catState.offset = 0;
+  loadCatalog();
+});
+document.getElementById("cat-q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("cat-search-btn").click(); }
+});
+document.getElementById("cat-prev").addEventListener("click", () => {
+  catState.offset = Math.max(0, catState.offset - CAT_PAGE);
+  loadCatalog();
+});
+document.getElementById("cat-next").addEventListener("click", () => {
+  catState.offset += CAT_PAGE;
+  loadCatalog();
+});
+
+async function openProduct(id) {
+  const modal = document.getElementById("product-modal");
+  const body = document.getElementById("modal-body");
+  body.innerHTML = "<p>Laddar…</p>";
+  modal.hidden = false;
+  let p;
+  try {
+    p = await api(`/api/produkt/${id}`);
+  } catch (err) {
+    body.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  const priceRows = p.price_history.map((h) => `${formatPrice(h.price)}`).join(" → ") || "—";
+  body.innerHTML = `
+    <h2>${escapeHtml(p.title ?? "(namnlös)")}</h2>
+    <p><strong>Pris:</strong> ${formatPrice(p.current_price)}</p>
+    ${p.category ? `<p><strong>Kategori:</strong> ${escapeHtml(p.category)}</p>` : ""}
+    <p><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Öppna produktsidan →</a></p>
+    <p><strong>Prishistorik:</strong> ${escapeHtml(priceRows)}</p>
+    <div id="desc-area"><strong>Beskrivning:</strong> <span id="desc-text">${p.description ? escapeHtml(p.description) : "<em>ingen ännu</em>"}</span></div>
+  `;
+  const descArea = document.getElementById("desc-area");
+  if (!p.description) {
+    const gen = document.createElement("button");
+    gen.type = "button";
+    gen.textContent = "Generera beskrivning";
+    gen.onclick = async () => {
+      gen.disabled = true; gen.textContent = "Genererar…";
+      try {
+        const r = await api(`/api/produkt/${id}/describe`, { method: "POST" });
+        document.getElementById("desc-text").innerHTML = escapeHtml(r.beskrivning ?? "");
+        gen.remove();
+      } catch (err) {
+        gen.disabled = false; gen.textContent = "Försök igen";
+        const e = document.createElement("p"); e.className = "error"; e.textContent = err.message;
+        descArea.appendChild(e);
+      }
+    };
+    descArea.appendChild(document.createElement("br"));
+    descArea.appendChild(gen);
+  }
+  const add = document.createElement("button");
+  add.type = "button";
+  add.textContent = "Lägg till i underlag";
+  add.onclick = async () => {
+    add.disabled = true;
+    try {
+      await api("/api/bistand", { method: "POST", body: JSON.stringify({ product_id: id }) });
+      add.textContent = "✓ Tillagd i underlag";
+      if (typeof loadBistand === "function") loadBistand();
+    } catch (err) {
+      add.disabled = false; add.textContent = "Fel — försök igen";
+    }
+  };
+  body.appendChild(add);
+}
+
+document.getElementById("modal-close").addEventListener("click", () => {
+  document.getElementById("product-modal").hidden = true;
+});
+document.querySelector("#product-modal .modal-backdrop").addEventListener("click", () => {
+  document.getElementById("product-modal").hidden = true;
+});
+
 (async function init() {
   try {
     await api("/api/status");

@@ -1,0 +1,96 @@
+name: Deploy
+
+# Auto-deploy till Cloudflare vid push till main. Repot har flera fristående
+# Workers (var sin wrangler.jsonc); bara de vars kod ändrats deployas.
+# shared/ triggar de Workers som importerar den. Manuell körning via
+# workflow_dispatch (valfri worker, eller "all").
+#
+# Secrets som krävs (Repo → Settings → Secrets → Actions):
+#   CLOUDFLARE_API_TOKEN     — Workers Scripts:Edit + binding-resurserna (D1/KV/R2/Queues)
+#   CLOUDFLARE_ACCOUNT_ID    — kontots ID
+#
+# wrangler deploy rör INTE secrets satta via `wrangler secret put` — de
+# kvarstår mellan deployer. Endast kod, vars och bindings uppdateras.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "engine/**"
+      - "processor/**"
+      - "sync/**"
+      - "token-rotator/**"
+      - "shared/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: "Vilken worker att deploya (eller 'all')"
+        type: choice
+        default: all
+        options: [all, app, engine, processor, sync, token-rotator]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Räkna ut vilka Workers som berörs. Vid push: via ändrade filer. Vid manuell
+  # körning: den valda (eller alla).
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      workers: ${{ steps.pick.outputs.workers }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            app: ['app/**', 'shared/**']
+            engine: ['engine/**', 'shared/**']
+            processor: ['processor/**', 'shared/**']
+            sync: ['sync/**', 'shared/**']
+            token-rotator: ['token-rotator/**']
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          CHOICE: ${{ github.event.inputs.worker }}
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$CHOICE" = "all" ]; then
+              echo 'workers=["app","engine","processor","sync","token-rotator"]' >> "$GITHUB_OUTPUT"
+            else
+              echo "workers=[\"$CHOICE\"]" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "workers=${CHANGED:-[]}" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: select
+    if: needs.select.outputs.workers != '[]' && needs.select.outputs.workers != ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: ${{ fromJSON(needs.select.outputs.workers) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.worker }}/package-lock.json
+      - name: Install
+        working-directory: ${{ matrix.worker }}
+        run: npm ci
+      - name: Deploy ${{ matrix.worker }}
+        working-directory: ${{ matrix.worker }}
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

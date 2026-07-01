@@ -39,10 +39,10 @@
   "vars": {
     // On-demand-beskrivning (Avd. B) proxas hit. INGEST_API_KEY sätts som secret.
     "ENGINE_URL": "https://engine.denied.se",
-    // OAuth-inloggning — SAMMA appar som politiker-webapp (client_id ej känsligt).
-    // client_secret sätts som wrangler secret. Kräver att product-describers
-    // callback-URL lagts till i respektive OAuth-apps redirect-lista.
-    "OAUTH_GOOGLE_CLIENT_ID": "1051427827429-nu6si4bq993a4onm8spk7bf94gctgr18.apps.googleusercontent.com",
-    "OAUTH_MICROSOFT_CLIENT_ID": "dd6d7bb1-3a2d-46ad-8d4f-12fe09691414"
+    // OAuth-inloggning — egna appar för product-describer (client_id ej känsligt;
+    // client_secret sätts som wrangler secret). Callback-URL:er registrerade i
+    // respektive OAuth-app: product-describer.denied.se/api/oauth/<provider>/callback.
+    "OAUTH_GOOGLE_CLIENT_ID": "551393755081-gtbd45b203icbbp0cu0q0p4meppli2fu.apps.googleusercontent.com",
+    "OAUTH_MICROSOFT_CLIENT_ID": "e4681888-4c55-493e-a4a4-2a5de75f425c"
   }
 }

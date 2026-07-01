@@ -249,7 +249,8 @@ async function loadBistand() {
 
     const head = document.createElement("div");
     head.className = "bistand-head";
-    head.innerHTML = `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener"><strong>${escapeHtml(r.title ?? "(namnlös)")}</strong></a> — ${formatPrice(r.current_price)}`;
+    const descBadge = r.description ? '<span class="ok">✓ beskrivning</span>' : '<span class="muted">○ saknar beskrivning</span>';
+    head.innerHTML = `<span><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener"><strong>${escapeHtml(r.title ?? "(namnlös)")}</strong></a> — ${formatPrice(r.current_price)} · ${descBadge}</span>`;
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "link-btn";
@@ -273,6 +274,39 @@ async function loadBistand() {
     li.appendChild(ta);
 
     list.appendChild(li);
+  }
+
+  // Bulk-knapp: beskriv de produkter i underlaget som saknar beskrivning, så det
+  // utskrivbara dokumentet blir komplett. Sekventiellt för att inte spränga
+  // gratis-Geminis takt.
+  const missing = currentBistand.filter((r) => !r.description);
+  const genWrap = document.getElementById("bistand-generate");
+  genWrap.innerHTML = "";
+  if (missing.length > 0) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = `Generera saknade beskrivningar (${missing.length})`;
+    const status = document.createElement("p");
+    status.className = "hint";
+    btn.onclick = async () => {
+      btn.disabled = true;
+      let done = 0;
+      for (const r of missing) {
+        status.textContent = `Genererar ${done + 1}/${missing.length}…`;
+        try {
+          await api(`/api/produkt/${r.id}/describe`, { method: "POST" });
+          done++;
+        } catch (err) {
+          status.textContent = `Stannade vid ${done}/${missing.length}: ${err.message}`;
+          await loadBistand();
+          return;
+        }
+      }
+      status.textContent = `Klart — ${done} beskrivningar genererade.`;
+      await loadBistand();
+    };
+    genWrap.appendChild(btn);
+    genWrap.appendChild(status);
   }
 }
 

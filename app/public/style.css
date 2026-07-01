@@ -202,3 +202,5 @@ button {
 #modal-close { position: absolute; top: 10px; right: 12px; margin: 0; }
 #modal-body h2 { margin-top: 0; padding-right: 60px; }
 #modal-body a { color: var(--accent); }
+
+#cat-category { margin: 4px 0 8px; }

@@ -51,7 +51,7 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 async function showApp() {
   document.getElementById("auth-view").hidden = true;
   document.getElementById("app-view").hidden = false;
-  await Promise.all([loadSettings(), loadJobs()]);
+  await Promise.all([loadSettings(), loadJobs(), loadBistand()]);
 }
 
 // ── Inställningar ────────────────────────────────────────────────────────
@@ -199,6 +199,87 @@ async function loadJobs() {
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// ── Bistånds-underlag ─────────────────────────────────────────────────────
+
+function formatPrice(kr) {
+  return kr == null ? "—" : `${kr.toLocaleString("sv-SE")} kr`;
+}
+
+async function searchCatalog() {
+  const q = document.getElementById("catalog-q").value;
+  const results = await api(`/api/catalog?q=${encodeURIComponent(q)}`);
+  const inBistand = new Set(currentBistand.map((r) => r.id));
+  const list = document.getElementById("catalog-results");
+  list.innerHTML = "";
+  for (const p of results) {
+    const li = document.createElement("li");
+    li.className = "catalog-row";
+    const info = document.createElement("span");
+    info.innerHTML = `<strong>${escapeHtml(p.title ?? "(namnlös)")}</strong> — ${formatPrice(p.current_price)}`;
+    li.appendChild(info);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "link-btn";
+    if (inBistand.has(p.id)) {
+      btn.textContent = "✓ Tillagd";
+      btn.disabled = true;
+    } else {
+      btn.textContent = "Lägg till";
+      btn.onclick = async () => {
+        await api("/api/bistand", { method: "POST", body: JSON.stringify({ product_id: p.id }) });
+        await loadBistand();
+        await searchCatalog();
+      };
+    }
+    li.appendChild(btn);
+    list.appendChild(li);
+  }
+}
+
+let currentBistand = [];
+
+async function loadBistand() {
+  currentBistand = await api("/api/bistand");
+  const list = document.getElementById("bistand-list");
+  list.innerHTML = "";
+  for (const r of currentBistand) {
+    const li = document.createElement("li");
+    li.className = "bistand-row";
+
+    const head = document.createElement("div");
+    head.className = "bistand-head";
+    head.innerHTML = `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener"><strong>${escapeHtml(r.title ?? "(namnlös)")}</strong></a> — ${formatPrice(r.current_price)}`;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "link-btn";
+    remove.textContent = "Ta bort";
+    remove.onclick = async () => {
+      await api(`/api/bistand/${r.id}`, { method: "DELETE" });
+      await loadBistand();
+      await searchCatalog();
+    };
+    head.appendChild(remove);
+    li.appendChild(head);
+
+    const ta = document.createElement("textarea");
+    ta.className = "motivation-input";
+    ta.rows = 2;
+    ta.placeholder = "Motivering — varför du behöver detta…";
+    ta.value = r.motivation ?? "";
+    ta.addEventListener("change", async () => {
+      await api("/api/bistand", { method: "POST", body: JSON.stringify({ product_id: r.id, motivation: ta.value }) });
+    });
+    li.appendChild(ta);
+
+    list.appendChild(li);
+  }
+}
+
+document.getElementById("catalog-search-btn").addEventListener("click", searchCatalog);
+document.getElementById("catalog-q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); searchCatalog(); }
+});
 
 // Pollar jobblistan var 5s medan appen är synlig — motsvarar sidans
 // tidigare polling i Flask-versionens index.html.

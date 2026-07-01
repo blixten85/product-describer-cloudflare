@@ -80,3 +80,34 @@ button {
   gap: 12px;
   flex-wrap: wrap;
 }
+.bistand-search { display: flex; gap: 8px; }
+.bistand-search input { flex: 1; }
+.bistand-search button { width: auto; white-space: nowrap; }
+.catalog-list, .bistand-list { list-style: none; padding: 0; margin: 8px 0; }
+.catalog-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bistand-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bistand-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.bistand-head a { color: var(--text); text-decoration: none; }
+.motivation-input { margin-top: 6px; }
+.btn-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}

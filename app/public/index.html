@@ -87,6 +87,21 @@
     <h2>Dina körningar</h2>
     <ul id="jobs-list"></ul>
   </div>
+
+  <div class="card" id="bistand-card">
+    <h2>Underlag till socialtjänsten</h2>
+    <p class="hint">Sök produkter, lägg till dem och skriv en motivering till varför du behöver dem. Skapa sedan ett utskrivbart underlag att skicka in.</p>
+
+    <div class="bistand-search">
+      <input type="text" id="catalog-q" placeholder="Sök produkt (namn)…">
+      <button type="button" id="catalog-search-btn">Sök</button>
+    </div>
+    <ul id="catalog-results" class="catalog-list"></ul>
+
+    <h3>Ditt underlag</h3>
+    <ul id="bistand-list" class="bistand-list"></ul>
+    <a href="/underlag" target="_blank" rel="noopener" id="underlag-btn" class="btn-link">Öppna utskrivbart underlag →</a>
+  </div>
 </main>
 
 <script src="/app.js"></script>

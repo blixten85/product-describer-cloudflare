@@ -125,3 +125,16 @@ CREATE TABLE alert_cooldown (
   product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
   last_alert INTEGER NOT NULL
 );
+
+-- Fas 5: bistånds-underlag. En rad per (konto, vald produkt) med kontots egna
+-- personliga motivering ("varför just jag behöver detta"). Kontot väljer
+-- produkter ur katalogen (products) och genererar en utskrivbar sida att skicka
+-- till socialtjänsten. Per konto, till skillnad från den operatörs-ägda katalogen.
+CREATE TABLE bistand_items (
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  motivation TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, product_id)
+);
+CREATE INDEX idx_bistand_account ON bistand_items(account_id);

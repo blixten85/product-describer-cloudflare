@@ -46,7 +46,8 @@ interface Env extends GitHubReportEnv {
 
 const REPO = "blixten85/product-describer-cloudflare";
 
-const LEASE_MS = 120_000; // hur länge ett leasat jobb är "ägt" innan det kan återtas
+const LEASE_MS = 120_000; // detail-jobb: kort lease (snabba)
+const LIST_LEASE_MS = 900_000; // list-jobb (crawl): lång lease, kan ta många minuter
 const MAX_ATTEMPTS = 5; // efter så många misslyckanden -> status='error'
 const MAX_LEASE = 50; // tak per lease-anrop
 
@@ -57,6 +58,16 @@ interface LeasedJob {
   site_id: number | null;
   detail_selector: string;
   use_stealth: number;
+  // Endast för list-jobb (crawl av listningssida).
+  base_url?: string;
+  product_selector?: string;
+  title_selector?: string;
+  price_selector?: string;
+  link_selector?: string;
+  pagination_type?: string;
+  max_pages?: number;
+  exclude_link_pattern?: string;
+  url_scope?: string;
 }
 
 const json = (data: unknown, status = 200): Response =>
@@ -74,10 +85,13 @@ async function leaseJobs(req: Request, env: Env): Promise<Response> {
   const now = Date.now();
 
   // Atomiskt: markera de N äldsta leasbara jobben som leased och returnera dem.
-  // Leasbar = pending, eller leased vars lease gått ut (självläkande).
+  // Leasbar = pending, eller leased vars lease gått ut (självläkande). List-jobb
+  // (crawl) får längre lease då de kan ta många minuter.
   const leased = await env.DB.prepare(
     `UPDATE render_jobs
-       SET status = 'leased', lease_until = ?1, attempts = attempts + 1, updated_at = ?1
+       SET status = 'leased',
+           lease_until = ?1 + CASE type WHEN 'list' THEN ?4 ELSE ?5 END,
+           attempts = attempts + 1, updated_at = ?1
      WHERE id IN (
        SELECT id FROM render_jobs
        WHERE status = 'pending' OR (status = 'leased' AND lease_until < ?2)
@@ -85,22 +99,38 @@ async function leaseJobs(req: Request, env: Env): Promise<Response> {
      )
      RETURNING id, url, type, site_id`,
   )
-    .bind(now + LEASE_MS, now, n)
+    .bind(now, now, n, LIST_LEASE_MS, LEASE_MS)
     .all<{ id: number; url: string; type: string; site_id: number | null }>();
 
   const rows = leased.results ?? [];
   if (rows.length === 0) return json({ jobs: [] });
 
-  // Berika med per-sajt-inställningar (detail_selector, use_stealth). Få sajter
-  // -> hämta alla och slå upp i minnet.
+  // Berika med per-sajt-inställningar. Få sajter -> hämta alla och slå upp i
+  // minnet. Detail-jobb behöver detail_selector/use_stealth; list-jobb behöver
+  // dessutom hela crawl-konfigen (list-selektorer + paginering).
   const sites = await env.DB.prepare(
-    "SELECT id, detail_selector, use_stealth FROM sites",
-  ).all<{ id: number; detail_selector: string; use_stealth: number }>();
+    `SELECT id, base_url, detail_selector, product_selector, title_selector, price_selector,
+            link_selector, pagination_type, max_pages, exclude_link_pattern, url_scope, use_stealth
+     FROM sites`,
+  ).all<{
+    id: number;
+    base_url: string;
+    detail_selector: string;
+    product_selector: string;
+    title_selector: string;
+    price_selector: string;
+    link_selector: string;
+    pagination_type: string;
+    max_pages: number;
+    exclude_link_pattern: string;
+    url_scope: string;
+    use_stealth: number;
+  }>();
   const siteMap = new Map((sites.results ?? []).map((s) => [s.id, s]));
 
   const jobs: LeasedJob[] = rows.map((r) => {
     const site = r.site_id != null ? siteMap.get(r.site_id) : undefined;
-    return {
+    const base: LeasedJob = {
       id: r.id,
       url: r.url,
       type: r.type,
@@ -108,6 +138,18 @@ async function leaseJobs(req: Request, env: Env): Promise<Response> {
       detail_selector: site?.detail_selector ?? "",
       use_stealth: site?.use_stealth ?? 0,
     };
+    if (r.type === "list" && site) {
+      base.base_url = site.base_url;
+      base.product_selector = site.product_selector;
+      base.title_selector = site.title_selector;
+      base.price_selector = site.price_selector;
+      base.link_selector = site.link_selector;
+      base.pagination_type = site.pagination_type;
+      base.max_pages = site.max_pages;
+      base.exclude_link_pattern = site.exclude_link_pattern;
+      base.url_scope = site.url_scope;
+    }
+    return base;
   });
   return json({ jobs });
 }
@@ -118,7 +160,8 @@ interface ResultBody {
   price?: number;
   source_text?: string;
   category?: string;
-  links?: string[]; // för list-jobb: upptäckta produkt-URL:er
+  links?: string[]; // för list-jobb: upptäckta produkt-URL:er (bakåtkompat)
+  items?: { url: string; title?: string; price?: number; category?: string }[]; // list-jobb: strukturerat
 }
 
 // POST /jobs/:id/result
@@ -182,7 +225,7 @@ async function reportResult(id: number, req: Request, env: Env): Promise<Respons
     );
   }
 
-  // List-jobb: skapa produkt-stubbar + detail-jobb för nya länkar (idempotent).
+  // List-jobb (bakåtkompat): bara URL:er -> produkt-stubbar + detail-jobb.
   for (const link of body.links ?? []) {
     stmts.push(
       env.DB.prepare(
@@ -201,13 +244,57 @@ async function reportResult(id: number, req: Request, env: Env): Promise<Respons
     );
   }
 
+  // List-jobb (strukturerat): varje item bär url + titel/pris från listkortet.
+  // Upserta produkten, spara prishistorik (dedupas mot senaste priset), och
+  // skapa ett detail-jobb bara om produkten ännu saknar source_text — så
+  // prisuppdateringar sker via list-crawl utan att re-rendera varje produktsida.
+  for (const item of body.items ?? []) {
+    if (!item.url) continue;
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO products (url, site_id, title, current_price, category, first_seen, last_updated)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+         ON CONFLICT(url) DO UPDATE SET
+           title = COALESCE(excluded.title, products.title),
+           current_price = COALESCE(excluded.current_price, products.current_price),
+           category = COALESCE(excluded.category, products.category),
+           last_updated = excluded.last_updated`,
+      ).bind(item.url, job.site_id, item.title ?? null, item.price ?? null, item.category ?? null, now),
+    );
+    if (item.price != null) {
+      // Bara om priset skiljer sig från senast noterade (undviker att skriva en
+      // rad per crawl när priset är oförändrat).
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO price_history (product_id, price, ts)
+           SELECT p.id, ?1, ?2 FROM products p
+           WHERE p.url = ?3 AND NOT EXISTS (
+             SELECT 1 FROM price_history ph WHERE ph.product_id = p.id
+               AND ph.price = ?1
+               AND ph.ts = (SELECT MAX(ts) FROM price_history ph2 WHERE ph2.product_id = p.id)
+           )`,
+        ).bind(item.price, now, item.url),
+      );
+    }
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO render_jobs (url, site_id, type, created_at, updated_at)
+         SELECT ?1, ?2, 'detail', ?3, ?3
+         WHERE EXISTS (SELECT 1 FROM products WHERE url = ?1 AND source_text IS NULL)
+           AND NOT EXISTS (
+             SELECT 1 FROM render_jobs WHERE url = ?1 AND type = 'detail' AND status IN ('pending','leased')
+           )`,
+      ).bind(item.url, job.site_id, now),
+    );
+  }
+
   // Markera jobbet klart.
   stmts.push(
     env.DB.prepare("UPDATE render_jobs SET status = 'done', updated_at = ?1 WHERE id = ?2").bind(now, id),
   );
 
   await env.DB.batch(stmts);
-  return json({ ok: true, created_detail_jobs: body.links?.length ?? 0 });
+  return json({ ok: true, links: body.links?.length ?? 0, items: body.items?.length ?? 0 });
 }
 
 interface IngestBody {
@@ -304,6 +391,35 @@ async function scheduleDetailJobs(env: Env, now: number, limit: number): Promise
   return r.meta.changes ?? 0;
 }
 
+// 2b. Schemalägg crawl (list-jobb) för sajter vars intervall löpt ut. En list-
+//     jobb per due sajt; hoppar sajter som redan har ett aktivt list-jobb.
+//     Sätter last_crawled direkt så nästa tick inte dubblar innan jobbet körts.
+async function scheduleDueCrawls(env: Env, now: number): Promise<number> {
+  const due = await env.DB.prepare(
+    `SELECT id, base_url FROM sites
+     WHERE enabled = 1
+       AND (last_crawled IS NULL OR last_crawled + scrape_interval * 1000 < ?1)
+       AND NOT EXISTS (
+         SELECT 1 FROM render_jobs rj
+         WHERE rj.site_id = sites.id AND rj.type = 'list' AND rj.status IN ('pending','leased')
+       )`,
+  )
+    .bind(now)
+    .all<{ id: number; base_url: string }>();
+  const sites = due.results ?? [];
+  if (sites.length === 0) return 0;
+
+  const stmts = sites.flatMap((s) => [
+    env.DB.prepare(
+      `INSERT INTO render_jobs (url, site_id, type, status, created_at, updated_at)
+       VALUES (?1, ?2, 'list', 'pending', ?3, ?3)`,
+    ).bind(s.base_url, s.id, now),
+    env.DB.prepare("UPDATE sites SET last_crawled = ?1 WHERE id = ?2").bind(now, s.id),
+  ]);
+  await env.DB.batch(stmts);
+  return sites.length;
+}
+
 // 3. Beskriv N produkter som saknar description (helst de med source_text att
 //    grunda sig på). Återanvänder shared/ — exakt samma motor som sync.
 async function describeMissing(
@@ -361,6 +477,7 @@ export default {
     const now = Date.now();
     try {
       const reclaimed = await reclaimLeases(env, now);
+      const crawls = await scheduleDueCrawls(env, now);
       const scheduled = await scheduleDetailJobs(env, now, Number(env.SCHEDULE_LIMIT) || 200);
       let described = 0;
       const chain = buildChainFromEnv(env);
@@ -375,7 +492,7 @@ export default {
       } else {
         console.warn("Ingen AI-leverantör konfigurerad — hoppar över beskriv-steget.");
       }
-      console.log(`cron: reclaimed=${reclaimed} scheduled=${scheduled} described=${described}`);
+      console.log(`cron: reclaimed=${reclaimed} crawls=${crawls} scheduled=${scheduled} described=${described}`);
     } catch (err) {
       console.error("cron misslyckades:", err);
       await reportErrorToGitHub(REPO, "Engine cron misslyckades", err, env);

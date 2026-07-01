@@ -69,6 +69,11 @@ CREATE TABLE sites (
   link_selector TEXT NOT NULL DEFAULT '',
   pagination_selector TEXT NOT NULL DEFAULT '',
   detail_selector TEXT NOT NULL DEFAULT '',   -- per-sajt CSS för produktbeskrivning (B.2)
+  -- Crawl/discovery (list-jobb). Speglar scraper_config i postgres.
+  pagination_type TEXT NOT NULL DEFAULT 'query',   -- 'query' (?page=N) | annat -> enkelsida
+  max_pages INTEGER NOT NULL DEFAULT 50,
+  exclude_link_pattern TEXT NOT NULL DEFAULT '',   -- hoppa över URL:er som innehåller detta
+  url_scope TEXT NOT NULL DEFAULT '',              -- behåll bara länkar under denna prefix
   use_stealth INTEGER NOT NULL DEFAULT 0,
   enabled INTEGER NOT NULL DEFAULT 1,
   scrape_interval INTEGER NOT NULL DEFAULT 3600, -- sekunder

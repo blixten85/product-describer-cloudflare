@@ -7,7 +7,20 @@ CREATE TABLE accounts (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   password_salt TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user', -- 'user' | 'admin' (operatörsverktyg gatas på admin)
   created_at INTEGER NOT NULL
+);
+
+-- Externa OAuth-identiteter (Google/Microsoft) länkade till ett lokalt konto.
+-- Konto skapat enbart via OAuth har ett slumpat oanvändbart lösenord.
+CREATE TABLE oauth_identities (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  provider TEXT NOT NULL,           -- google | microsoft
+  provider_user_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(provider, provider_user_id),
+  UNIQUE(account_id, provider)
 );
 
 -- En rad per (konto, leverantör) — encrypted_config är ett AES-GCM-krypterat

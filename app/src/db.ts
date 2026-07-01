@@ -12,6 +12,12 @@ export interface Env {
   // Avd. B: on-demand-beskrivning proxas till engine-Workern.
   ENGINE_URL?: string;
   INGEST_API_KEY?: string;
+  // OAuth-inloggning (återanvänder politiker-webapps appar). client_id = vars,
+  // client_secret = wrangler secret.
+  OAUTH_GOOGLE_CLIENT_ID?: string;
+  OAUTH_GOOGLE_CLIENT_SECRET?: string;
+  OAUTH_MICROSOFT_CLIENT_ID?: string;
+  OAUTH_MICROSOFT_CLIENT_SECRET?: string;
 }
 
 export interface Account {

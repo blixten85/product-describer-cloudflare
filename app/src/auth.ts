@@ -28,9 +28,14 @@ export async function login(env: Env, email: string, password: string): Promise<
   const ok = await verifyPassword(password, account.password_hash, account.password_salt);
   if (!ok) throw new Error("Fel e-post eller lösenord");
 
+  return { sessionToken: await createSession(env, account.id) };
+}
+
+// Skapar en session för ett konto-id (delas av lösenordslogin och OAuth-callback).
+export async function createSession(env: Env, accountId: string): Promise<string> {
   const sessionToken = randomId() + randomId();
-  await env.SESSIONS.put(`session:${sessionToken}`, account.id, { expirationTtl: SESSION_TTL_SECONDS });
-  return { sessionToken };
+  await env.SESSIONS.put(`session:${sessionToken}`, accountId, { expirationTtl: SESSION_TTL_SECONDS });
+  return sessionToken;
 }
 
 export async function logout(env: Env, sessionToken: string | null): Promise<void> {

@@ -43,6 +43,11 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 
+# mark-jobbet pushar `deployed`-taggen -> kräver contents: write (repot har
+# read-only GITHUB_TOKEN som default, annars 403 på tag-push).
+permissions:
+  contents: write
+
 jobs:
   # Vilka Workers ska deployas? Manuell körning -> den valda. Schema -> de vars
   # filer ändrats sedan `deployed`-taggen (shared/ -> alla som importerar den).

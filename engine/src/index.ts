@@ -42,6 +42,10 @@ interface Env extends GitHubReportEnv {
   SCHEDULE_LIMIT?: string; // max detail-jobb att skapa per tick (default 200)
   DESCRIBE_LIMIT?: string; // max produkter att beskriva per tick (default 10)
   DESCRIBE_WORKERS?: string; // parallella AI-anrop (default 2)
+  // Prisbevaknings-trösklar (vars).
+  ALERT_MIN_DROP_PCT?: string; // minsta prisfall i % (default 5)
+  ALERT_MIN_DROP_KR?: string; // minsta prisfall i kr (default 100)
+  ALERT_COOLDOWN_HOURS?: string; // cooldown per bevakning (default 24)
 }
 
 const REPO = "blixten85/product-describer-cloudflare";
@@ -476,6 +480,111 @@ async function describeProduct(req: Request, env: Env): Promise<Response> {
   return json({ beskrivning: parts.beskrivning, varför: parts.varför, cached: false });
 }
 
+// Skicka ett larm till en kanal. Alla kanaler är enkla utgående HTTP-POST.
+async function sendAlert(kind: string, target: string, title: string, body: string, url: string): Promise<boolean> {
+  try {
+    if (kind === "ntfy") {
+      const r = await fetch(target, { method: "POST", headers: { Title: title, Click: url }, body });
+      return r.ok;
+    }
+    if (kind === "slack") {
+      const r = await fetch(target, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: `*${title}*\n${body}\n${url}` }),
+      });
+      return r.ok;
+    }
+    if (kind === "telegram") {
+      const sep = target.lastIndexOf(":"); // target = "<bottoken>:<chatid>"
+      const r = await fetch(`https://api.telegram.org/bot${target.slice(0, sep)}/sendMessage`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: target.slice(sep + 1), text: `${title}\n${body}\n${url}` }),
+      });
+      return r.ok;
+    }
+    if (kind === "webhook") {
+      const r = await fetch(target, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, body, url }),
+      });
+      return r.ok;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+interface DropRow {
+  account_id: string;
+  product_id: number;
+  last_alert: number | null;
+  title: string | null;
+  url: string;
+  new_price: number;
+  old_price: number;
+}
+
+// Prisbevakning: hitta bevakade produkter vars senaste pris fallit mot föregående,
+// över tröskel + utanför cooldown, och larma kontots aktiva kanaler.
+async function checkPriceDrops(env: Env, now: number): Promise<number> {
+  const minPct = Number(env.ALERT_MIN_DROP_PCT) || 5;
+  const minKr = Number(env.ALERT_MIN_DROP_KR) || 100;
+  const cooldownMs = (Number(env.ALERT_COOLDOWN_HOURS) || 24) * 3_600_000;
+
+  const drops = await env.DB.prepare(
+    `WITH ranked AS (
+       SELECT product_id, price, ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY ts DESC) rn
+       FROM price_history
+       WHERE product_id IN (SELECT DISTINCT product_id FROM price_watch)
+     ),
+     pair AS (
+       SELECT a.product_id, a.price AS new_price, b.price AS old_price
+       FROM ranked a JOIN ranked b ON a.product_id = b.product_id AND b.rn = 2
+       WHERE a.rn = 1
+     )
+     SELECT w.account_id, w.product_id, w.last_alert, pr.title, pr.url,
+            pair.new_price, pair.old_price
+     FROM price_watch w
+     JOIN pair ON pair.product_id = w.product_id
+     JOIN products pr ON pr.id = w.product_id
+     WHERE pair.new_price < pair.old_price`,
+  ).all<DropRow>();
+
+  let sent = 0;
+  for (const d of drops.results ?? []) {
+    const dropKr = d.old_price - d.new_price;
+    const dropPct = (dropKr / d.old_price) * 100;
+    if (dropPct < minPct || dropKr < minKr) continue;
+    if (d.last_alert != null && d.last_alert + cooldownMs > now) continue;
+
+    const channels = await env.DB.prepare(
+      "SELECT kind, target FROM alert_channels WHERE account_id = ?1 AND enabled = 1",
+    )
+      .bind(d.account_id)
+      .all<{ kind: string; target: string }>();
+    const list = channels.results ?? [];
+    if (list.length === 0) continue;
+
+    const title = "💸 Prisfall";
+    const body = `${d.title ?? "Produkt"}: ${d.old_price} kr → ${d.new_price} kr (-${dropKr} kr, ${dropPct.toFixed(0)} %)`;
+    let anySent = false;
+    for (const c of list) {
+      if (await sendAlert(c.kind, c.target, title, body, d.url)) anySent = true;
+    }
+    if (anySent) {
+      await env.DB.prepare("UPDATE price_watch SET last_alert = ?1 WHERE account_id = ?2 AND product_id = ?3")
+        .bind(now, d.account_id, d.product_id)
+        .run();
+      sent++;
+    }
+  }
+  return sent;
+}
+
 export default {
   // EN cron-trigger (*/5), EN handler som gör allt sekventiellt och cappat per
   // tick (DESIGN.md §4.4). Inga flera cronjobb att koordinera.
@@ -484,11 +593,12 @@ export default {
     try {
       // Beskrivning sker INTE här längre — den är on-demand (POST /describe),
       // eftersom gratis-Geminis kvot inte räcker för att förbeskriva ~32k
-      // produkter. Cronen sköter bara crawl/discovery + source_text-jobb.
+      // produkter. Cronen sköter bara crawl/discovery + source_text-jobb + larm.
       const reclaimed = await reclaimLeases(env, now);
       const crawls = await scheduleDueCrawls(env, now);
       const scheduled = await scheduleDetailJobs(env, now, Number(env.SCHEDULE_LIMIT) || 200);
-      console.log(`cron: reclaimed=${reclaimed} crawls=${crawls} scheduled=${scheduled}`);
+      const alerts = await checkPriceDrops(env, now);
+      console.log(`cron: reclaimed=${reclaimed} crawls=${crawls} scheduled=${scheduled} alerts=${alerts}`);
     } catch (err) {
       console.error("cron misslyckades:", err);
       await reportErrorToGitHub(REPO, "Engine cron misslyckades", err, env);

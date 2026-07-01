@@ -145,6 +145,29 @@ CREATE TABLE alert_cooldown (
   last_alert INTEGER NOT NULL
 );
 
+-- Avd. B prisbevakning: en rad per (konto, bevakad produkt). last_alert håller
+-- cooldown per bevakning (så samma prisfall inte larmas om och om).
+CREATE TABLE price_watch (
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  last_alert INTEGER,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, product_id)
+);
+CREATE INDEX idx_price_watch_product ON price_watch(product_id);
+
+-- Larmkanaler per konto. kind: ntfy | slack | telegram | webhook. target bär
+-- kanalens adress/config (ntfy-topic-URL, Slack-webhook, telegram "token:chatid",
+-- generisk webhook-URL).
+CREATE TABLE alert_channels (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  kind TEXT NOT NULL,
+  target TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+);
+
 -- Fas 5: bistånds-underlag. En rad per (konto, vald produkt) med kontots egna
 -- personliga motivering ("varför just jag behöver detta"). Kontot väljer
 -- produkter ur katalogen (products) och genererar en utskrivbar sida att skicka

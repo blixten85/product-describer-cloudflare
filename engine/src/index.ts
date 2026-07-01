@@ -1,3 +1,4 @@
+// (auto-deploy-verifiering 2026-07-01)
 // product-describer-engine — hjärnan i den enhetliga arkitekturen (se DESIGN.md).
 //
 // Cloudflare blir sanningskälla; servern krymps till en statslös Playwright-

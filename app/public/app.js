@@ -395,26 +395,60 @@ let catalogLoaded = false;
 const catState = { q: "", offset: 0 };
 const CAT_PAGE = 30;
 
+let catRows = [];
+
+// Liten åtgärdsknapp som postar och visar bock vid lyckat.
+function quickBtn(label, doneLabel, fn) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "link-btn";
+  b.textContent = label;
+  b.onclick = async () => {
+    b.disabled = true;
+    try { await fn(); b.textContent = doneLabel; } catch { b.disabled = false; b.textContent = "Fel"; }
+  };
+  return b;
+}
+
 async function loadCatalog() {
   catalogLoaded = true;
-  const rows = await api(`/api/catalog?q=${encodeURIComponent(catState.q)}&offset=${catState.offset}`);
+  catRows = await api(`/api/catalog?q=${encodeURIComponent(catState.q)}&offset=${catState.offset}`);
   const list = document.getElementById("cat-results");
   list.innerHTML = "";
-  for (const p of rows) {
+  for (const p of catRows) {
     const li = document.createElement("li");
     li.className = "catalog-row";
-    li.innerHTML = `<span><strong>${escapeHtml(p.title ?? "(namnlös)")}</strong> — ${formatPrice(p.current_price)}${p.description ? " ✓" : ""}</span>`;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "link-btn";
-    btn.textContent = "Visa";
-    btn.onclick = () => openProduct(p.id);
-    li.appendChild(btn);
+    const info = document.createElement("span");
+    info.innerHTML = `<strong>${escapeHtml(p.title ?? "(namnlös)")}</strong> — ${formatPrice(p.current_price)}${p.description ? " ✓" : ""}`;
+    li.appendChild(info);
+    const actions = document.createElement("span");
+    actions.className = "cat-actions";
+    const view = document.createElement("button");
+    view.type = "button"; view.className = "link-btn"; view.textContent = "Visa";
+    view.onclick = () => openProduct(p.id);
+    actions.appendChild(view);
+    actions.appendChild(quickBtn("+ Underlag", "✓", () => api("/api/bistand", { method: "POST", body: JSON.stringify({ product_id: p.id }) })));
+    actions.appendChild(quickBtn("★ Bevaka", "✓", () => api("/api/watch", { method: "POST", body: JSON.stringify({ product_id: p.id }) })));
+    li.appendChild(actions);
     list.appendChild(li);
   }
   document.getElementById("cat-prev").hidden = catState.offset === 0;
-  document.getElementById("cat-next").hidden = rows.length < CAT_PAGE;
+  document.getElementById("cat-next").hidden = catRows.length < CAT_PAGE;
 }
+
+// Bulk: importera alla produkter på nuvarande sida till underlag eller bevakning.
+async function bulkImport(path) {
+  const btnMsg = document.getElementById("cat-bulk-msg");
+  let done = 0;
+  for (const p of catRows) {
+    try { await api(path, { method: "POST", body: JSON.stringify({ product_id: p.id }) }); done++; } catch {}
+    btnMsg.textContent = `Lade till ${done}/${catRows.length}…`;
+  }
+  btnMsg.textContent = `Klart — ${done} tillagda.`;
+  if (path === "/api/bistand" && typeof loadBistand === "function") loadBistand();
+}
+document.getElementById("cat-bulk-underlag").addEventListener("click", () => bulkImport("/api/bistand"));
+document.getElementById("cat-bulk-bevaka").addEventListener("click", () => bulkImport("/api/watch"));
 
 document.getElementById("cat-search-btn").addEventListener("click", () => {
   catState.q = document.getElementById("cat-q").value;

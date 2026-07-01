@@ -170,6 +170,9 @@ button {
 }
 .dept-link:hover { background: rgba(255, 255, 255, 0.05); }
 .cat-pager { display: flex; justify-content: space-between; margin-top: 12px; }
+.cat-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.cat-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.9rem; color: var(--hint); margin: 4px 0 8px; }
+.catalog-row { gap: 8px; }
 #product-modal {
   position: fixed;
   inset: 0;

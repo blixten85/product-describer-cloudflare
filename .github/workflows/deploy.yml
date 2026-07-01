@@ -1,26 +1,29 @@
 name: Deploy
 
-# Auto-deploy till Cloudflare när en PR mot main mergas. Repot har flera
-# fristående Workers (var sin wrangler.jsonc); bara de vars kod ändrats deployas.
-# shared/ triggar de Workers som importerar den. Manuell körning via
-# workflow_dispatch (valfri worker, eller "all").
+# Auto-deploy till Cloudflare. Repot har flera fristående Workers (var sin
+# wrangler.jsonc); bara de vars kod ändrats deployas. shared/ triggar de Workers
+# som importerar den.
 #
-# OBS triggern: `pull_request: closed` (+ merged-guard), INTE `push`. Auto-merge
-# görs av github-actions[bot] med GITHUB_TOKEN, vars pushar INTE triggar andra
-# workflows (loopskydd) — en `push`-trigger skulle alltså missa varje auto-merge.
-# pull_request-closed fyrar oavsett vem som mergar. Branch protection kräver PR
-# för main, så detta täcker alla vägar in.
+# VARFÖR SCHEMA I STÄLLET FÖR push/pull_request: auto-merge görs av
+# github-actions[bot] med GITHUB_TOKEN, vars events (både push OCH
+# pull_request-closed) INTE triggar andra workflows (loopskydd). En event-trigger
+# skulle alltså missa varje auto-merge. Repot är publikt -> Actions-minuter är
+# gratis, så en poll var 10:e min kostar inget.
 #
-# Secrets som krävs (Repo → Settings → Secrets → Actions):
+# EXAKT-EN-GÅNG: en flyttbar git-tagg `deployed` är vattenmärke för senast
+# deployade commit. Varje körning deployar diffen deployed..HEAD och flyttar
+# taggen först när deployen lyckats — inga dubbla eller missade deployer.
+#
+# Secrets (Repo → Settings → Secrets → Actions):
 #   CLOUDFLARE_API_TOKEN     — Workers Scripts:Edit + binding-resurserna (D1/KV/R2/Queues)
 #   CLOUDFLARE_ACCOUNT_ID    — kontots ID
 #
-# wrangler deploy rör INTE secrets satta via `wrangler secret put` — de
-# kvarstår mellan deployer. Endast kod, vars och bindings uppdateras.
+# wrangler deploy rör INTE secrets satta via `wrangler secret put` — bara kod,
+# vars och bindings uppdateras.
 
 on:
-  pull_request:
-    types: [closed]
+  schedule:
+    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       worker:
@@ -30,45 +33,60 @@ on:
         options: [all, app, engine, processor, sync, token-rotator]
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: deploy
   cancel-in-progress: false
 
 jobs:
-  # Räkna ut vilka Workers som berörs. Vid merge: via ändrade filer i PR:en. Vid
-  # manuell körning: den valda (eller alla). Körs bara för mergade PR:er (eller
-  # manuell dispatch) — stängda-ej-mergade PR:er hoppas över.
+  # Vilka Workers ska deployas? Manuell körning -> den valda. Schema -> de vars
+  # filer ändrats sedan `deployed`-taggen (shared/ -> alla som importerar den).
   select:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
       workers: ${{ steps.pick.outputs.workers }}
+      head: ${{ steps.pick.outputs.head }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        if: github.event_name == 'pull_request'
         with:
-          filters: |
-            app: ['app/**', 'shared/**']
-            engine: ['engine/**', 'shared/**']
-            processor: ['processor/**', 'shared/**']
-            sync: ['sync/**', 'shared/**']
-            token-rotator: ['token-rotator/**']
+          fetch-depth: 0
       - id: pick
         env:
           EVENT: ${{ github.event_name }}
           CHOICE: ${{ github.event.inputs.worker }}
-          CHANGED: ${{ steps.filter.outputs.changes }}
         run: |
+          set -euo pipefail
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
           if [ "$EVENT" = "workflow_dispatch" ]; then
             if [ "$CHOICE" = "all" ]; then
               echo 'workers=["app","engine","processor","sync","token-rotator"]' >> "$GITHUB_OUTPUT"
             else
               echo "workers=[\"$CHOICE\"]" >> "$GITHUB_OUTPUT"
             fi
-          else
-            echo "workers=${CHANGED:-[]}" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          # Schema: diff mot vattenmärket. Saknas taggen -> bara senaste commit.
+          if git rev-parse -q --verify refs/tags/deployed >/dev/null; then
+            BASE=$(git rev-parse refs/tags/deployed)
+          else
+            BASE=$(git rev-parse HEAD^ || git rev-parse HEAD)
+          fi
+          CHANGED=$(git diff --name-only "$BASE"..HEAD || true)
+          echo "Ändrade filer sedan $BASE:"; echo "$CHANGED"
+
+          python3 - "$CHANGED" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, sys
+          changed = sys.argv[1].splitlines()
+          workers = set()
+          shared_consumers = {"app", "engine", "processor", "sync"}
+          for f in changed:
+              top = f.split("/", 1)[0]
+              if top in {"app", "engine", "processor", "sync", "token-rotator"}:
+                  workers.add(top)
+              elif top == "shared":
+                  workers |= shared_consumers
+          print("workers=" + json.dumps(sorted(workers)))
+          PY
 
   deploy:
     needs: select
@@ -94,3 +112,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  # Flytta vattenmärket till deployad HEAD — bara vid schema och bara om ingen
+  # deploy failade (skippad deploy = inga worker-ändringar = OK att avancera).
+  mark:
+    needs: [select, deploy]
+    if: always() && github.event_name == 'schedule' && needs.select.result == 'success' && needs.deploy.result != 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: |
+          git tag -f deployed "${{ needs.select.outputs.head }}"
+          git push -f origin refs/tags/deployed

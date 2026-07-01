@@ -25,6 +25,7 @@ export interface Account {
   email: string;
   password_hash: string;
   password_salt: string;
+  role: string; // 'user' | 'admin'
   created_at: number;
 }
 

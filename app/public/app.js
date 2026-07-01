@@ -48,10 +48,23 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   document.getElementById("auth-view").hidden = false;
 });
 
-async function showApp() {
+let isAdmin = false;
+
+async function showApp(status) {
   document.getElementById("auth-view").hidden = true;
   document.getElementById("app-view").hidden = false;
-  await Promise.all([loadSettings(), loadJobs(), loadBistand()]);
+  if (!status) { try { status = await api("/api/status"); } catch { status = null; } }
+  isAdmin = (status && status.role === "admin") || false;
+
+  // Beskriv-verktyget (provider-nycklar/uppladdning/jobb) är bara för admin.
+  const verktygLink = document.querySelector('.dept-link[data-dept="verktyg"]');
+  if (verktygLink) verktygLink.hidden = !isAdmin;
+  const tasks = [loadBistand()];
+  if (isAdmin) tasks.push(loadSettings(), loadJobs());
+  await Promise.all(tasks);
+
+  // Icke-admin börjar i Katalog (verktygs-avdelningen är dold för dem).
+  showDept(isAdmin ? "verktyg" : "katalog");
 }
 
 // ── Inställningar ────────────────────────────────────────────────────────
@@ -454,8 +467,8 @@ if (oauthError) {
 
 (async function init() {
   try {
-    await api("/api/status");
-    showApp();
+    const status = await api("/api/status");
+    showApp(status);
   } catch {
     // inte inloggad — auth-view visas redan som default
   }

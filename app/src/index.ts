@@ -67,7 +67,14 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     });
   }
 
-  if (pathname === "/api/status" && request.method === "GET") return handleStatus(env, account.id);
+  // Operatörsverktygen (beskriv-verktyget: provider-nycklar, uppladdning, jobb)
+  // är admin-only nu när appen är publik. Katalog/underlag/bevakning är öppna
+  // för alla inloggade.
+  if (/^\/api\/(settings|upload|jobs)(\/|$)/.test(pathname) && account.role !== "admin") {
+    return json({ error: "Endast administratör" }, 403);
+  }
+
+  if (pathname === "/api/status" && request.method === "GET") return handleStatus(env, account);
   if (pathname === "/api/settings" && request.method === "GET") return handleGetSettings(env, account.id);
   if (pathname === "/api/settings/key" && request.method === "POST") return handleSetKey(request, env, account.id);
   if (pathname.startsWith("/api/settings/key/") && request.method === "DELETE") {
@@ -208,9 +215,12 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
   return resp;
 }
 
-async function handleStatus(env: Env, accountId: string): Promise<Response> {
-  const configured = await configuredProviders(env, accountId);
-  return json({ configured, ready: configured.length > 0 });
+async function handleStatus(env: Env, account: { id: string; email: string; role: string }): Promise<Response> {
+  const isAdmin = account.role === "admin";
+  // Provider-info bara relevant för admin (beskriv-verktyget). Vanliga konton
+  // får bara veta vem de är + sin roll.
+  const configured = isAdmin ? await configuredProviders(env, account.id) : [];
+  return json({ email: account.email, role: account.role, configured, ready: configured.length > 0 });
 }
 
 async function handleGetSettings(env: Env, accountId: string): Promise<Response> {

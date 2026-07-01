@@ -3,7 +3,8 @@
 // validerar, sparar till R2/D1 och lägger ett "extract"-meddelande i kön;
 // processor-Workern (../processor/src/index.ts) gör det faktiska arbetet.
 
-import { signup, login, logout, requireAccount } from "./auth";
+import { signup, login, logout, requireAccount, createSession } from "./auth";
+import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
 import { searchCatalog, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeViaEngine } from "./catalog";
@@ -48,6 +49,12 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   if (pathname === "/signup" && request.method === "POST") return handleSignup(request, env);
   if (pathname === "/login" && request.method === "POST") return handleLogin(request, env);
   if (pathname === "/logout" && request.method === "POST") return handleLogout(request, env);
+
+  // OAuth-inloggning (publik — sker före inloggning).
+  const oauthStart = pathname.match(/^\/api\/oauth\/([a-z]+)$/);
+  if (oauthStart && request.method === "GET") return handleOAuthStart(oauthStart[1], env);
+  const oauthCb = pathname.match(/^\/api\/oauth\/([a-z]+)\/callback$/);
+  if (oauthCb && request.method === "GET") return handleOAuthCallbackRoute(oauthCb[1], request, env, url);
 
   // Allt annat under /api/* (och /underlag) kräver inloggning.
   const account = await requireAccount(env, request);
@@ -122,6 +129,53 @@ function withSessionCookie(body: unknown, sessionToken: string): Response {
     `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
   );
   return resp;
+}
+
+// OAuth: starta inloggning -> redirect till leverantören med en state-nonce
+// (lagras i cookie, verifieras i callbacken mot CSRF).
+async function handleOAuthStart(provider: string, env: Env): Promise<Response> {
+  if (!isKnownProvider(provider)) return json({ error: "Okänd leverantör" }, 404);
+  const state = crypto.randomUUID();
+  let authorizeUrl: string;
+  try {
+    authorizeUrl = getAuthorizeUrl(provider, env, state);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : "OAuth ej konfigurerad" }, 503);
+  }
+  const resp = new Response(null, { status: 302, headers: { Location: authorizeUrl } });
+  resp.headers.append(
+    "Set-Cookie",
+    `oauth_state=${state}; Path=/api/oauth; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,
+  );
+  return resp;
+}
+
+async function handleOAuthCallbackRoute(provider: string, request: Request, env: Env, url: URL): Promise<Response> {
+  if (!isKnownProvider(provider)) return json({ error: "Okänd leverantör" }, 404);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const cookieState = (request.headers.get("Cookie") ?? "").match(/oauth_state=([^;]+)/)?.[1] ?? null;
+  if (!code || !state || !cookieState || state !== cookieState) {
+    return redirectTo("/?error=oauth_state");
+  }
+  try {
+    const { accountId } = await handleOAuthCallback(provider, env, code);
+    const sessionToken = await createSession(env, accountId);
+    const resp = redirectTo("/");
+    resp.headers.append(
+      "Set-Cookie",
+      `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
+    );
+    resp.headers.append("Set-Cookie", "oauth_state=; Path=/api/oauth; Max-Age=0");
+    return resp;
+  } catch (err) {
+    console.error("oauth callback:", err);
+    return redirectTo("/?error=oauth_failed");
+  }
+}
+
+function redirectTo(location: string): Response {
+  return new Response(null, { status: 302, headers: { Location: location } });
 }
 
 async function handleSignup(request: Request, env: Env): Promise<Response> {

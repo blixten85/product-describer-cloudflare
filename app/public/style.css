@@ -111,6 +111,25 @@ button {
   text-decoration: none;
   font-weight: 600;
 }
+.oauth-divider {
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  line-height: 0.1em;
+  margin: 20px 0;
+}
+.oauth-divider span { background: var(--card-bg); padding: 0 10px; color: var(--hint); font-size: 0.85rem; }
+.oauth-btn {
+  display: block;
+  text-align: center;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.oauth-btn:hover { border-color: var(--accent); }
 .hamburger {
   width: auto;
   background: none;

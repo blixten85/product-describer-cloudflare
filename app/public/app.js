@@ -445,6 +445,13 @@ document.querySelector("#product-modal .modal-backdrop").addEventListener("click
   document.getElementById("product-modal").hidden = true;
 });
 
+const oauthError = new URLSearchParams(location.search).get("error");
+if (oauthError) {
+  const msg = oauthError === "oauth_state" ? "Inloggningen avbröts (säkerhetskontroll). Försök igen." : "OAuth-inloggning misslyckades. Försök igen.";
+  document.getElementById("login-msg").textContent = msg;
+  history.replaceState(null, "", location.pathname);
+}
+
 (async function init() {
   try {
     await api("/api/status");

@@ -1,9 +1,15 @@
 name: Deploy
 
-# Auto-deploy till Cloudflare vid push till main. Repot har flera fristående
-# Workers (var sin wrangler.jsonc); bara de vars kod ändrats deployas.
+# Auto-deploy till Cloudflare när en PR mot main mergas. Repot har flera
+# fristående Workers (var sin wrangler.jsonc); bara de vars kod ändrats deployas.
 # shared/ triggar de Workers som importerar den. Manuell körning via
 # workflow_dispatch (valfri worker, eller "all").
+#
+# OBS triggern: `pull_request: closed` (+ merged-guard), INTE `push`. Auto-merge
+# görs av github-actions[bot] med GITHUB_TOKEN, vars pushar INTE triggar andra
+# workflows (loopskydd) — en `push`-trigger skulle alltså missa varje auto-merge.
+# pull_request-closed fyrar oavsett vem som mergar. Branch protection kräver PR
+# för main, så detta täcker alla vägar in.
 #
 # Secrets som krävs (Repo → Settings → Secrets → Actions):
 #   CLOUDFLARE_API_TOKEN     — Workers Scripts:Edit + binding-resurserna (D1/KV/R2/Queues)
@@ -13,16 +19,8 @@ name: Deploy
 # kvarstår mellan deployer. Endast kod, vars och bindings uppdateras.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "app/**"
-      - "engine/**"
-      - "processor/**"
-      - "sync/**"
-      - "token-rotator/**"
-      - "shared/**"
-      - ".github/workflows/deploy.yml"
+  pull_request:
+    types: [closed]
   workflow_dispatch:
     inputs:
       worker:
@@ -36,9 +34,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Räkna ut vilka Workers som berörs. Vid push: via ändrade filer. Vid manuell
-  # körning: den valda (eller alla).
+  # Räkna ut vilka Workers som berörs. Vid merge: via ändrade filer i PR:en. Vid
+  # manuell körning: den valda (eller alla). Körs bara för mergade PR:er (eller
+  # manuell dispatch) — stängda-ej-mergade PR:er hoppas över.
   select:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
       workers: ${{ steps.pick.outputs.workers }}
@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
-        if: github.event_name == 'push'
+        if: github.event_name == 'pull_request'
         with:
           filters: |
             app: ['app/**', 'shared/**']

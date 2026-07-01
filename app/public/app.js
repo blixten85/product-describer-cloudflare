@@ -49,12 +49,17 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 });
 
 let isAdmin = false;
+let describeMode = "on-demand";
+let hasOwnKey = false;
 
 async function showApp(status) {
   document.getElementById("auth-view").hidden = true;
   document.getElementById("app-view").hidden = false;
   if (!status) { try { status = await api("/api/status"); } catch { status = null; } }
   isAdmin = (status && status.role === "admin") || false;
+  describeMode = (status && status.describe_mode) || "on-demand";
+  hasOwnKey = (status && status.has_own_key) || false;
+  setupDescribeToggle();
 
   // Beskriv-verktyget (provider-nycklar/uppladdning/jobb) är bara för admin.
   const verktygLink = document.querySelector('.dept-link[data-dept="verktyg"]');
@@ -289,38 +294,71 @@ async function loadBistand() {
     list.appendChild(li);
   }
 
-  // Bulk-knapp: beskriv de produkter i underlaget som saknar beskrivning, så det
-  // utskrivbara dokumentet blir komplett. Sekventiellt för att inte spränga
-  // gratis-Geminis takt.
+  // Beskriv de produkter i underlaget som saknar beskrivning. I auto-läge körs
+  // det direkt vid inläsning; annars via knapp.
   const missing = currentBistand.filter((r) => !r.description);
   const genWrap = document.getElementById("bistand-generate");
   genWrap.innerHTML = "";
-  if (missing.length > 0) {
+  if (missing.length === 0) return;
+
+  const status = document.createElement("p");
+  status.className = "hint";
+  genWrap.appendChild(status);
+
+  if (describeMode === "auto") {
+    await runDescribeMissing(missing, status);
+  } else {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = `Generera saknade beskrivningar (${missing.length})`;
-    const status = document.createElement("p");
-    status.className = "hint";
-    btn.onclick = async () => {
-      btn.disabled = true;
-      let done = 0;
-      for (const r of missing) {
-        status.textContent = `Genererar ${done + 1}/${missing.length}…`;
-        try {
-          await api(`/api/produkt/${r.id}/describe`, { method: "POST" });
-          done++;
-        } catch (err) {
-          status.textContent = `Stannade vid ${done}/${missing.length}: ${err.message}`;
-          await loadBistand();
-          return;
-        }
-      }
-      status.textContent = `Klart — ${done} beskrivningar genererade.`;
-      await loadBistand();
-    };
-    genWrap.appendChild(btn);
-    genWrap.appendChild(status);
+    btn.onclick = () => { btn.disabled = true; runDescribeMissing(missing, status); };
+    genWrap.insertBefore(btn, status);
   }
+}
+
+let describing = false;
+async function runDescribeMissing(missing, statusEl) {
+  if (describing) return;
+  describing = true;
+  let done = 0;
+  for (const r of missing) {
+    statusEl.textContent = `Genererar ${done + 1}/${missing.length}…`;
+    try {
+      await api(`/api/produkt/${r.id}/describe`, { method: "POST" });
+      done++;
+    } catch (err) {
+      statusEl.textContent = `Stannade vid ${done}/${missing.length}: ${err.message}`;
+      describing = false;
+      await loadBistand();
+      return;
+    }
+  }
+  statusEl.textContent = `Klart — ${done} beskrivningar genererade.`;
+  describing = false;
+  await loadBistand();
+}
+
+// Auto-läget: bara tillåtet med egen API-nyckel (eller admin), annars skulle det
+// tära på operatörens delade kvot. Annars låst med förklaring.
+function setupDescribeToggle() {
+  const toggle = document.getElementById("describe-auto-toggle");
+  const hint = document.getElementById("describe-auto-hint");
+  const allowed = hasOwnKey || isAdmin;
+  toggle.checked = describeMode === "auto";
+  toggle.disabled = !allowed;
+  hint.textContent = allowed
+    ? "På: beskrivningar genereras automatiskt för produkter i underlaget. Av: du trycker på knappen själv."
+    : "Kräver en egen API-nyckel (annars används on-demand). Lägg till en nyckel för att aktivera.";
+  toggle.onchange = async () => {
+    const mode = toggle.checked ? "auto" : "on-demand";
+    try {
+      await api("/api/describe-mode", { method: "POST", body: JSON.stringify({ mode }) });
+      describeMode = mode;
+      if (mode === "auto") await loadBistand();
+    } catch (err) {
+      toggle.checked = !toggle.checked;
+    }
+  };
 }
 
 document.getElementById("catalog-search-btn").addEventListener("click", searchCatalog);

@@ -9,6 +9,9 @@ export interface Env {
   PROVIDER_CONFIG_KEY: string;
   JOB_QUEUE: Queue<JobMessage>;
   GITHUB_ERROR_REPORT_TOKEN?: string;
+  // Avd. B: on-demand-beskrivning proxas till engine-Workern.
+  ENGINE_URL?: string;
+  INGEST_API_KEY?: string;
 }
 
 export interface Account {

@@ -19,15 +19,17 @@ export interface BistandRow extends CatalogRow {
 }
 
 // Sök i katalogen på titel. Tom sökning -> ett urval (senaste produkterna) så
-// pickern inte är tom vid start.
-export async function searchCatalog(env: Env, q: string): Promise<CatalogRow[]> {
+// listan inte är tom vid start. offset för sidbläddring (katalogvyn).
+export async function searchCatalog(env: Env, q: string, offset = 0): Promise<CatalogRow[]> {
   const query = q.trim();
-  const sql =
-    "SELECT id, url, title, current_price, description FROM products" +
-    (query ? " WHERE title LIKE ?1 ORDER BY id LIMIT ?2" : " ORDER BY id DESC LIMIT ?1");
+  const off = Math.max(0, offset | 0);
   const stmt = query
-    ? env.DB.prepare(sql).bind(`%${query}%`, CATALOG_LIMIT)
-    : env.DB.prepare(sql).bind(CATALOG_LIMIT);
+    ? env.DB.prepare(
+        "SELECT id, url, title, current_price, description FROM products WHERE title LIKE ?1 ORDER BY id LIMIT ?2 OFFSET ?3",
+      ).bind(`%${query}%`, CATALOG_LIMIT, off)
+    : env.DB.prepare(
+        "SELECT id, url, title, current_price, description FROM products ORDER BY id DESC LIMIT ?1 OFFSET ?2",
+      ).bind(CATALOG_LIMIT, off);
   const { results } = await stmt.all<CatalogRow>();
   return results ?? [];
 }

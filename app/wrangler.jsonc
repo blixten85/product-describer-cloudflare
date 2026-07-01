@@ -35,5 +35,9 @@
         "binding": "JOB_QUEUE"
       }
     ]
+  },
+  "vars": {
+    // On-demand-beskrivning (Avd. B) proxas hit. INGEST_API_KEY sätts som secret.
+    "ENGINE_URL": "https://engine.denied.se"
   }
 }

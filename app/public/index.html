@@ -34,10 +34,17 @@
 
 <main id="app-view" hidden>
   <nav class="header-links">
+    <button id="hamburger-btn" class="hamburger" aria-label="Meny">☰</button>
     <h1>Product Describer</h1>
     <button id="logout-btn" class="link-btn">Logga ut</button>
   </nav>
+  <nav id="dept-drawer" hidden>
+    <button class="dept-link" data-dept="verktyg">Beskriv-verktyg</button>
+    <button class="dept-link" data-dept="underlag">Ansökningsunderlag</button>
+    <button class="dept-link" data-dept="katalog">Katalog</button>
+  </nav>
 
+  <section id="dept-verktyg" class="dept">
   <div class="card" id="settings-card">
     <h2>AI-leverantörer</h2>
     <p class="hint">Lägg till minst en API-nyckel för att kunna skicka in filer.</p>
@@ -87,7 +94,9 @@
     <h2>Dina körningar</h2>
     <ul id="jobs-list"></ul>
   </div>
+  </section>
 
+  <section id="dept-underlag" class="dept" hidden>
   <div class="card" id="bistand-card">
     <h2>Underlag till socialtjänsten</h2>
     <p class="hint">Sök produkter, lägg till dem och skriv en motivering till varför du behöver dem. Skapa sedan ett utskrivbart underlag att skicka in.</p>
@@ -101,6 +110,31 @@
     <h3>Ditt underlag</h3>
     <ul id="bistand-list" class="bistand-list"></ul>
     <a href="/underlag" target="_blank" rel="noopener" id="underlag-btn" class="btn-link">Öppna utskrivbart underlag →</a>
+  </div>
+  </section>
+
+  <section id="dept-katalog" class="dept" hidden>
+    <div class="card">
+      <h2>Katalog</h2>
+      <p class="hint">Bläddra och sök bland produkterna. Klicka på en produkt för detaljer, prishistorik och beskrivning.</p>
+      <div class="bistand-search">
+        <input type="text" id="cat-q" placeholder="Sök produkt (namn)…">
+        <button type="button" id="cat-search-btn">Sök</button>
+      </div>
+      <ul id="cat-results" class="catalog-list"></ul>
+      <div class="cat-pager">
+        <button type="button" id="cat-prev" class="link-btn" hidden>← Föregående</button>
+        <button type="button" id="cat-next" class="link-btn" hidden>Nästa →</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="product-modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <button type="button" id="modal-close" class="link-btn">✕ Stäng</button>
+      <div id="modal-body"></div>
+    </div>
   </div>
 </main>
 

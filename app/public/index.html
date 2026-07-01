@@ -46,6 +46,7 @@
     <button class="dept-link" data-dept="verktyg">Beskriv-verktyg</button>
     <button class="dept-link" data-dept="underlag">Ansökningsunderlag</button>
     <button class="dept-link" data-dept="katalog">Katalog</button>
+    <button class="dept-link" data-dept="bevakning">Prisbevakning</button>
   </nav>
 
   <section id="dept-verktyg" class="dept">
@@ -136,6 +137,30 @@
         <button type="button" id="cat-prev" class="link-btn" hidden>← Föregående</button>
         <button type="button" id="cat-next" class="link-btn" hidden>Nästa →</button>
       </div>
+    </div>
+  </section>
+
+  <section id="dept-bevakning" class="dept" hidden>
+    <div class="card">
+      <h2>Prisbevakning</h2>
+      <p class="hint">Bevaka produkter och få larm när priset faller (≥5 % och ≥100 kr). Lägg till en produkt via "Bevaka pris" i katalogen.</p>
+      <ul id="watch-list" class="bistand-list"></ul>
+    </div>
+    <div class="card">
+      <h2>Larmkanaler</h2>
+      <p class="hint">Vart larmen ska skickas. Lägg till en eller flera.</p>
+      <ul id="channel-list" class="bistand-list"></ul>
+      <div class="channel-add">
+        <select id="channel-kind">
+          <option value="ntfy">ntfy (topic-URL)</option>
+          <option value="slack">Slack (webhook-URL)</option>
+          <option value="telegram">Telegram (bottoken:chatid)</option>
+          <option value="webhook">Webhook (URL)</option>
+        </select>
+        <input type="text" id="channel-target" placeholder="Adress/config…">
+        <button type="button" id="channel-add-btn">Lägg till</button>
+      </div>
+      <p class="hint" id="channel-msg"></p>
     </div>
   </section>
 

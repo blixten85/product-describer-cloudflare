@@ -378,6 +378,7 @@ function showDept(name) {
   for (const s of document.querySelectorAll(".dept")) s.hidden = s.id !== `dept-${name}`;
   document.getElementById("dept-drawer").hidden = true;
   if (name === "katalog" && !catalogLoaded) loadCatalog();
+  if (name === "bevakning") { loadWatches(); loadChannels(); }
 }
 
 document.getElementById("hamburger-btn").addEventListener("click", () => {
@@ -487,7 +488,70 @@ async function openProduct(id) {
     }
   };
   body.appendChild(add);
+
+  const watch = document.createElement("button");
+  watch.type = "button";
+  watch.textContent = "Bevaka pris";
+  watch.onclick = async () => {
+    watch.disabled = true;
+    try {
+      await api("/api/watch", { method: "POST", body: JSON.stringify({ product_id: id }) });
+      watch.textContent = "✓ Bevakas";
+    } catch (err) {
+      watch.disabled = false; watch.textContent = "Fel — försök igen";
+    }
+  };
+  body.appendChild(watch);
 }
+
+// ── Prisbevakning ─────────────────────────────────────────────────────────
+
+async function loadWatches() {
+  const rows = await api("/api/watch");
+  const list = document.getElementById("watch-list");
+  list.innerHTML = rows.length ? "" : '<li class="hint">Inga bevakade produkter än.</li>';
+  for (const r of rows) {
+    const li = document.createElement("li");
+    li.className = "catalog-row";
+    li.innerHTML = `<span><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title ?? "(namnlös)")}</a> — ${formatPrice(r.current_price)}</span>`;
+    const rm = document.createElement("button");
+    rm.type = "button"; rm.className = "link-btn"; rm.textContent = "Sluta bevaka";
+    rm.onclick = async () => { await api(`/api/watch/${r.id}`, { method: "DELETE" }); loadWatches(); };
+    li.appendChild(rm);
+    list.appendChild(li);
+  }
+}
+
+async function loadChannels() {
+  const rows = await api("/api/channels");
+  const list = document.getElementById("channel-list");
+  list.innerHTML = rows.length ? "" : '<li class="hint">Inga kanaler än.</li>';
+  for (const c of rows) {
+    const li = document.createElement("li");
+    li.className = "catalog-row";
+    const shown = c.target.length > 40 ? c.target.slice(0, 40) + "…" : c.target;
+    li.innerHTML = `<span><strong>${escapeHtml(c.kind)}</strong> — ${escapeHtml(shown)}</span>`;
+    const rm = document.createElement("button");
+    rm.type = "button"; rm.className = "link-btn"; rm.textContent = "Ta bort";
+    rm.onclick = async () => { await api(`/api/channels/${c.id}`, { method: "DELETE" }); loadChannels(); };
+    li.appendChild(rm);
+    list.appendChild(li);
+  }
+}
+
+document.getElementById("channel-add-btn").addEventListener("click", async () => {
+  const kind = document.getElementById("channel-kind").value;
+  const target = document.getElementById("channel-target").value;
+  const msg = document.getElementById("channel-msg");
+  try {
+    await api("/api/channels", { method: "POST", body: JSON.stringify({ kind, target }) });
+    document.getElementById("channel-target").value = "";
+    msg.textContent = "Kanal tillagd.";
+    loadChannels();
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
 
 document.getElementById("modal-close").addEventListener("click", () => {
   document.getElementById("product-modal").hidden = true;

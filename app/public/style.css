@@ -171,6 +171,12 @@ button {
   align-items: center;
   justify-content: center;
 }
+/* id-selektorernas display måste vika för hidden-attributet (annars går varken
+   modalen eller lådan att dölja/stänga). */
+#product-modal[hidden],
+#dept-drawer[hidden] {
+  display: none;
+}
 .modal-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); }
 .modal-card {
   position: relative;

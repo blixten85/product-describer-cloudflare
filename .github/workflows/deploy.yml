@@ -22,6 +22,13 @@ name: Deploy
 # vars och bindings uppdateras.
 
 on:
+  # Snabb väg: fyrar när Bot Auto-Merge kör (dess workflow_run-event suppas INTE
+  # av loopskyddet, till skillnad från push/pull_request). Tagg-vattenmärket gör
+  # att detta bara deployar när main faktiskt avancerat -> ofarligt att fyra ofta.
+  workflow_run:
+    workflows: ["Bot Auto-Merge"]
+    types: [completed]
+  # Långsam fallback ifall GitHub-cron ändå kör (ökänt opålitligt på publika repon).
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
@@ -47,6 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main   # workflow_run checkar annars ut triggande PR:ens SHA
           fetch-depth: 0
       - id: pick
         env:
@@ -98,6 +106,8 @@ jobs:
         worker: ${{ fromJSON(needs.select.outputs.workers) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # deploya alltid main, inte triggande PR:ens SHA (workflow_run)
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -117,11 +127,12 @@ jobs:
   # deploy failade (skippad deploy = inga worker-ändringar = OK att avancera).
   mark:
     needs: [select, deploy]
-    if: always() && github.event_name == 'schedule' && needs.select.result == 'success' && needs.deploy.result != 'failure'
+    if: always() && github.event_name != 'workflow_dispatch' && needs.select.result == 'success' && needs.deploy.result != 'failure'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - run: |
           git tag -f deployed "${{ needs.select.outputs.head }}"

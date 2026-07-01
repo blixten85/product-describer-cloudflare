@@ -4,7 +4,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    // Pensionerad (Fas 3, 2026-07-01): katalogen migrerad postgres->D1 och
+    // engine-Workern (product-describer-engine) beskriver nu mot D1 via egen
+    // cron. Sync beskrev mot postgres (scraper-API) — samma produkter -> dubbel
+    // Gemini-förbrukning på en återvändsgränd. Cron tömd (Workern kvar,
+    // reversibel). Rivs helt i Fas 6 tillsammans med lokal postgres/scraper-API.
+    "crons": []
   },
   "vars": {
     // scraper-API:et tunnlas publikt här (löst 2026-06-25), skyddat av

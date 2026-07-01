@@ -26,6 +26,7 @@ export interface Account {
   password_hash: string;
   password_salt: string;
   role: string; // 'user' | 'admin'
+  describe_mode: string; // 'on-demand' | 'auto'
   created_at: number;
 }
 

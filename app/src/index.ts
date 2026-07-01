@@ -7,7 +7,7 @@ import { signup, login, logout, requireAccount, createSession } from "./auth";
 import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
 import { searchCatalog, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
-import { getProduct, describeViaEngine } from "./catalog";
+import { getProduct, describeProduct } from "./catalog";
 import {
   configuredProviders,
   getProviderConfig,
@@ -100,8 +100,14 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   }
   const descMatch = pathname.match(/^\/api\/produkt\/(\d+)\/describe$/);
   if (descMatch && request.method === "POST") {
-    const { status, ...body } = await describeViaEngine(env, Number(descMatch[1]));
+    const { status, ...body } = await describeProduct(env, account.id, Number(descMatch[1]));
     return json(body, status);
+  }
+  if (pathname === "/api/describe-mode" && request.method === "POST") {
+    const data = await request.json<{ mode?: string }>().catch(() => ({}) as { mode?: string });
+    const mode = data.mode === "auto" ? "auto" : "on-demand";
+    await env.DB.prepare("UPDATE accounts SET describe_mode = ?1 WHERE id = ?2").bind(mode, account.id).run();
+    return json({ ok: true, describe_mode: mode });
   }
   if (pathname === "/api/bistand" && request.method === "GET") return json(await listBistand(env, account.id));
   if (pathname === "/api/bistand" && request.method === "POST") return handleAddBistand(request, env, account.id);
@@ -215,12 +221,20 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
   return resp;
 }
 
-async function handleStatus(env: Env, account: { id: string; email: string; role: string }): Promise<Response> {
+async function handleStatus(env: Env, account: { id: string; email: string; role: string; describe_mode: string }): Promise<Response> {
   const isAdmin = account.role === "admin";
-  // Provider-info bara relevant för admin (beskriv-verktyget). Vanliga konton
-  // får bara veta vem de är + sin roll.
-  const configured = isAdmin ? await configuredProviders(env, account.id) : [];
-  return json({ email: account.email, role: account.role, configured, ready: configured.length > 0 });
+  // Provider-info bara relevant för admin (beskriv-verktyget). has_own_key styr
+  // om "auto"-läget kan slås på (annars skulle det tära på operatörens kvot).
+  const ownKeys = await configuredProviders(env, account.id);
+  const configured = isAdmin ? ownKeys : [];
+  return json({
+    email: account.email,
+    role: account.role,
+    describe_mode: account.describe_mode,
+    has_own_key: ownKeys.length > 0,
+    configured,
+    ready: configured.length > 0,
+  });
 }
 
 async function handleGetSettings(env: Env, accountId: string): Promise<Response> {

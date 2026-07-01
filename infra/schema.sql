@@ -8,6 +8,7 @@ CREATE TABLE accounts (
   password_hash TEXT NOT NULL,
   password_salt TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'user', -- 'user' | 'admin' (operatörsverktyg gatas på admin)
+  describe_mode TEXT NOT NULL DEFAULT 'on-demand', -- 'on-demand' | 'auto' (auto = beskriv underlaget automatiskt)
   created_at INTEGER NOT NULL
 );
 

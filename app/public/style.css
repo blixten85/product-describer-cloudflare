@@ -103,6 +103,9 @@ button {
   gap: 12px;
 }
 .bistand-head a { color: var(--text); text-decoration: none; }
+.describe-mode-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; cursor: pointer; }
+.describe-mode-row input { width: auto; margin: 0; }
+.describe-mode-row span { font-size: 0.95rem; }
 .motivation-input { margin-top: 6px; }
 .btn-link {
   display: inline-block;

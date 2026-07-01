@@ -116,25 +116,34 @@ export async function renderUnderlag(env: Env, account: Account): Promise<string
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Underlag till socialtjänsten</title>
 <style>
+  /* Mörkt tema på skärm (matchar sajten); ljust dokument vid utskrift. */
   * { box-sizing: border-box; }
-  body { font-family: Georgia, "Times New Roman", serif; color: #111; max-width: 820px; margin: 0 auto; padding: 2rem; line-height: 1.5; }
-  header { border-bottom: 2px solid #111; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  body { font-family: Georgia, "Times New Roman", serif; background: #0c0e14; color: #e4e2dc; max-width: 820px; margin: 0 auto; padding: 2rem; line-height: 1.5; }
+  header { border-bottom: 2px solid #f0a500; padding-bottom: 1rem; margin-bottom: 1.5rem; }
   h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
-  .sub { color: #444; margin: 0; }
-  .item { border: 1px solid #ccc; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; page-break-inside: avoid; }
+  .sub { color: #9aa0aa; margin: 0; }
+  .item { border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; background: #13161f; page-break-inside: avoid; }
   .item h3 { margin: 0 0 .5rem; font-size: 1.15rem; }
   table.meta { border-collapse: collapse; margin: 0 0 .5rem; }
-  table.meta th { text-align: left; padding: .1rem .75rem .1rem 0; color: #555; font-weight: normal; vertical-align: top; white-space: nowrap; }
-  table.meta a { color: #0a58ca; word-break: break-all; }
-  .beskrivning { margin: .5rem 0; color: #333; }
-  .motivering { margin-top: .75rem; padding-top: .5rem; border-top: 1px dashed #bbb; }
+  table.meta th { text-align: left; padding: .1rem .75rem .1rem 0; color: #9aa0aa; font-weight: normal; vertical-align: top; white-space: nowrap; }
+  table.meta a { color: #f0a500; word-break: break-all; }
+  .beskrivning { margin: .5rem 0; color: #c9c7c1; }
+  .motivering { margin-top: .75rem; padding-top: .5rem; border-top: 1px dashed rgba(255,255,255,0.2); }
   .motivering p { margin: .25rem 0 0; }
   .summary { margin-top: 1.5rem; font-size: 1.1rem; }
   .toolbar { margin-bottom: 1.5rem; }
-  .toolbar button, .toolbar a { font-family: system-ui, sans-serif; font-size: .95rem; padding: .5rem 1rem; margin-right: .5rem; border: 1px solid #888; border-radius: 5px; background: #f4f4f4; color: #111; text-decoration: none; cursor: pointer; }
-  .empty { color: #777; font-style: italic; }
+  .toolbar button, .toolbar a { font-family: system-ui, sans-serif; font-size: .95rem; padding: .5rem 1rem; margin-right: .5rem; border: 1px solid rgba(255,255,255,0.2); border-radius: 5px; background: #13161f; color: #e4e2dc; text-decoration: none; cursor: pointer; }
+  .empty { color: #6b7280; font-style: italic; }
   @media print {
-    body { padding: 0; max-width: none; }
+    /* Rent dokument för socialtjänsten: vitt papper, svart text. */
+    body { background: #fff; color: #111; padding: 0; max-width: none; }
+    header { border-bottom-color: #111; }
+    .sub { color: #444; }
+    .item { border-color: #ccc; background: #fff; }
+    table.meta th { color: #555; }
+    table.meta a { color: #0a58ca; }
+    .beskrivning { color: #333; }
+    .motivering { border-top-color: #bbb; }
     .toolbar { display: none; }
     a { color: #111; text-decoration: none; }
   }

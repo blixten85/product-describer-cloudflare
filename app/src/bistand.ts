@@ -18,19 +18,29 @@ export interface BistandRow extends CatalogRow {
   motivation: string;
 }
 
-// Sök i katalogen på titel. Tom sökning -> ett urval (senaste produkterna) så
-// listan inte är tom vid start. offset för sidbläddring (katalogvyn).
-export async function searchCatalog(env: Env, q: string, offset = 0): Promise<CatalogRow[]> {
+// Sök i katalogen på titel + valfritt kategori-filter. offset för sidbläddring.
+export async function searchCatalog(env: Env, q: string, offset = 0, category = ""): Promise<CatalogRow[]> {
   const query = q.trim();
+  const cat = category.trim();
   const off = Math.max(0, offset | 0);
-  const stmt = query
-    ? env.DB.prepare(
-        "SELECT id, url, title, current_price, description FROM products WHERE title LIKE ?1 ORDER BY id LIMIT ?2 OFFSET ?3",
-      ).bind(`%${query}%`, CATALOG_LIMIT, off)
-    : env.DB.prepare(
-        "SELECT id, url, title, current_price, description FROM products ORDER BY id DESC LIMIT ?1 OFFSET ?2",
-      ).bind(CATALOG_LIMIT, off);
-  const { results } = await stmt.all<CatalogRow>();
+  const where: string[] = [];
+  const binds: (string | number)[] = [];
+  if (query) { where.push(`title LIKE ?${binds.length + 1}`); binds.push(`%${query}%`); }
+  if (cat) { where.push(`category = ?${binds.length + 1}`); binds.push(cat); }
+  const whereSql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
+  const order = query || cat ? "id" : "id DESC";
+  const sql = `SELECT id, url, title, current_price, description FROM products${whereSql} ORDER BY ${order} LIMIT ?${binds.length + 1} OFFSET ?${binds.length + 2}`;
+  const { results } = await env.DB.prepare(sql)
+    .bind(...binds, CATALOG_LIMIT, off)
+    .all<CatalogRow>();
+  return results ?? [];
+}
+
+// Distinkta kategorier (för filter-dropdownen), med antal.
+export async function listCategories(env: Env): Promise<{ category: string; n: number }[]> {
+  const { results } = await env.DB.prepare(
+    "SELECT category, count(*) n FROM products WHERE category IS NOT NULL AND category != '' GROUP BY category ORDER BY n DESC LIMIT 100",
+  ).all<{ category: string; n: number }>();
   return results ?? [];
 }
 

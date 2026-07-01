@@ -6,7 +6,7 @@
 import { signup, login, logout, requireAccount, createSession } from "./auth";
 import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
-import { searchCatalog, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
+import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeProduct } from "./catalog";
 import { listWatches, addWatch, removeWatch, listChannels, addChannel, removeChannel } from "./watch";
 import {
@@ -92,8 +92,16 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
 
   // Bistånds-underlag: katalog-sök + kontots valda produkter med motivering.
   if (pathname === "/api/catalog" && request.method === "GET") {
-    return json(await searchCatalog(env, url.searchParams.get("q") ?? "", Number(url.searchParams.get("offset")) || 0));
+    return json(
+      await searchCatalog(
+        env,
+        url.searchParams.get("q") ?? "",
+        Number(url.searchParams.get("offset")) || 0,
+        url.searchParams.get("category") ?? "",
+      ),
+    );
   }
+  if (pathname === "/api/categories" && request.method === "GET") return json(await listCategories(env));
   const prodMatch = pathname.match(/^\/api\/produkt\/(\d+)$/);
   if (prodMatch && request.method === "GET") {
     const p = await getProduct(env, Number(prodMatch[1]));

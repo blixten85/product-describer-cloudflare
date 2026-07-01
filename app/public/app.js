@@ -377,7 +377,7 @@ setInterval(() => {
 function showDept(name) {
   for (const s of document.querySelectorAll(".dept")) s.hidden = s.id !== `dept-${name}`;
   document.getElementById("dept-drawer").hidden = true;
-  if (name === "katalog" && !catalogLoaded) loadCatalog();
+  if (name === "katalog" && !catalogLoaded) { loadCategories(); loadCatalog(); }
   if (name === "bevakning") { loadWatches(); loadChannels(); }
 }
 
@@ -392,7 +392,7 @@ for (const btn of document.querySelectorAll(".dept-link")) {
 // ── Katalog (Avd. B) ──────────────────────────────────────────────────────
 
 let catalogLoaded = false;
-const catState = { q: "", offset: 0 };
+const catState = { q: "", offset: 0, category: "" };
 const CAT_PAGE = 30;
 
 let catRows = [];
@@ -412,7 +412,7 @@ function quickBtn(label, doneLabel, fn) {
 
 async function loadCatalog() {
   catalogLoaded = true;
-  catRows = await api(`/api/catalog?q=${encodeURIComponent(catState.q)}&offset=${catState.offset}`);
+  catRows = await api(`/api/catalog?q=${encodeURIComponent(catState.q)}&offset=${catState.offset}&category=${encodeURIComponent(catState.category)}`);
   const list = document.getElementById("cat-results");
   list.innerHTML = "";
   for (const p of catRows) {
@@ -450,6 +450,23 @@ async function bulkImport(path) {
 document.getElementById("cat-bulk-underlag").addEventListener("click", () => bulkImport("/api/bistand"));
 document.getElementById("cat-bulk-bevaka").addEventListener("click", () => bulkImport("/api/watch"));
 
+async function loadCategories() {
+  const cats = await api("/api/categories");
+  const sel = document.getElementById("cat-category");
+  sel.innerHTML = '<option value="">Alla kategorier</option>';
+  for (const c of cats) {
+    const o = document.createElement("option");
+    o.value = c.category;
+    o.textContent = `${c.category} (${c.n})`;
+    sel.appendChild(o);
+  }
+  sel.value = catState.category;
+}
+document.getElementById("cat-category").addEventListener("change", (e) => {
+  catState.category = e.target.value;
+  catState.offset = 0;
+  loadCatalog();
+});
 document.getElementById("cat-search-btn").addEventListener("click", () => {
   catState.q = document.getElementById("cat-q").value;
   catState.offset = 0;

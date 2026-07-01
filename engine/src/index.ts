@@ -385,7 +385,7 @@ async function scheduleDetailJobs(env: Env, now: number, limit: number): Promise
   const r = await env.DB.prepare(
     `INSERT INTO render_jobs (url, site_id, type, status, created_at, updated_at)
      SELECT p.url, p.site_id, 'detail', 'pending', ?1, ?1 FROM products p
-     WHERE p.source_text IS NULL
+     WHERE (p.source_text IS NULL OR p.category IS NULL)
        AND NOT EXISTS (
          SELECT 1 FROM render_jobs rj
          WHERE rj.url = p.url AND rj.type = 'detail' AND rj.status IN ('pending','leased')

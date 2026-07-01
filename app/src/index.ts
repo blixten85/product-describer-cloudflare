@@ -8,6 +8,7 @@ import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
 import { searchCatalog, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeProduct } from "./catalog";
+import { listWatches, addWatch, removeWatch, listChannels, addChannel, removeChannel } from "./watch";
 import {
   configuredProviders,
   getProviderConfig,
@@ -108,6 +109,30 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     const mode = data.mode === "auto" ? "auto" : "on-demand";
     await env.DB.prepare("UPDATE accounts SET describe_mode = ?1 WHERE id = ?2").bind(mode, account.id).run();
     return json({ ok: true, describe_mode: mode });
+  }
+
+  // Prisbevakning + larmkanaler.
+  if (pathname === "/api/watch" && request.method === "GET") return json(await listWatches(env, account.id));
+  if (pathname === "/api/watch" && request.method === "POST") {
+    const data = await request.json<{ product_id?: number }>().catch(() => ({}) as { product_id?: number });
+    const ok = await addWatch(env, account.id, Number(data.product_id));
+    return ok ? json({ ok: true }) : json({ error: "Produkten finns inte" }, 404);
+  }
+  const watchMatch = pathname.match(/^\/api\/watch\/(\d+)$/);
+  if (watchMatch && request.method === "DELETE") {
+    await removeWatch(env, account.id, Number(watchMatch[1]));
+    return json({ ok: true });
+  }
+  if (pathname === "/api/channels" && request.method === "GET") return json(await listChannels(env, account.id));
+  if (pathname === "/api/channels" && request.method === "POST") {
+    const data = await request.json<{ kind?: string; target?: string }>().catch(() => ({}) as { kind?: string; target?: string });
+    const id = await addChannel(env, account.id, data.kind ?? "", data.target ?? "");
+    return id ? json({ ok: true, id }) : json({ error: "Ogiltig kanal" }, 400);
+  }
+  const chMatch = pathname.match(/^\/api\/channels\/([A-Za-z0-9_-]+)$/);
+  if (chMatch && request.method === "DELETE") {
+    await removeChannel(env, account.id, chMatch[1]);
+    return json({ ok: true });
   }
   if (pathname === "/api/bistand" && request.method === "GET") return json(await listBistand(env, account.id));
   if (pathname === "/api/bistand" && request.method === "POST") return handleAddBistand(request, env, account.id);

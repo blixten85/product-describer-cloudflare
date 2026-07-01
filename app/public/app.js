@@ -378,6 +378,7 @@ function showDept(name) {
   for (const s of document.querySelectorAll(".dept")) s.hidden = s.id !== `dept-${name}`;
   document.getElementById("dept-drawer").hidden = true;
   if (name === "katalog" && !catalogLoaded) loadCatalog();
+  if (name === "bevakning") { loadWatches(); loadChannels(); }
 }
 
 document.getElementById("hamburger-btn").addEventListener("click", () => {
@@ -394,26 +395,60 @@ let catalogLoaded = false;
 const catState = { q: "", offset: 0 };
 const CAT_PAGE = 30;
 
+let catRows = [];
+
+// Liten åtgärdsknapp som postar och visar bock vid lyckat.
+function quickBtn(label, doneLabel, fn) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "link-btn";
+  b.textContent = label;
+  b.onclick = async () => {
+    b.disabled = true;
+    try { await fn(); b.textContent = doneLabel; } catch { b.disabled = false; b.textContent = "Fel"; }
+  };
+  return b;
+}
+
 async function loadCatalog() {
   catalogLoaded = true;
-  const rows = await api(`/api/catalog?q=${encodeURIComponent(catState.q)}&offset=${catState.offset}`);
+  catRows = await api(`/api/catalog?q=${encodeURIComponent(catState.q)}&offset=${catState.offset}`);
   const list = document.getElementById("cat-results");
   list.innerHTML = "";
-  for (const p of rows) {
+  for (const p of catRows) {
     const li = document.createElement("li");
     li.className = "catalog-row";
-    li.innerHTML = `<span><strong>${escapeHtml(p.title ?? "(namnlös)")}</strong> — ${formatPrice(p.current_price)}${p.description ? " ✓" : ""}</span>`;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "link-btn";
-    btn.textContent = "Visa";
-    btn.onclick = () => openProduct(p.id);
-    li.appendChild(btn);
+    const info = document.createElement("span");
+    info.innerHTML = `<strong>${escapeHtml(p.title ?? "(namnlös)")}</strong> — ${formatPrice(p.current_price)}${p.description ? " ✓" : ""}`;
+    li.appendChild(info);
+    const actions = document.createElement("span");
+    actions.className = "cat-actions";
+    const view = document.createElement("button");
+    view.type = "button"; view.className = "link-btn"; view.textContent = "Visa";
+    view.onclick = () => openProduct(p.id);
+    actions.appendChild(view);
+    actions.appendChild(quickBtn("+ Underlag", "✓", () => api("/api/bistand", { method: "POST", body: JSON.stringify({ product_id: p.id }) })));
+    actions.appendChild(quickBtn("★ Bevaka", "✓", () => api("/api/watch", { method: "POST", body: JSON.stringify({ product_id: p.id }) })));
+    li.appendChild(actions);
     list.appendChild(li);
   }
   document.getElementById("cat-prev").hidden = catState.offset === 0;
-  document.getElementById("cat-next").hidden = rows.length < CAT_PAGE;
+  document.getElementById("cat-next").hidden = catRows.length < CAT_PAGE;
 }
+
+// Bulk: importera alla produkter på nuvarande sida till underlag eller bevakning.
+async function bulkImport(path) {
+  const btnMsg = document.getElementById("cat-bulk-msg");
+  let done = 0;
+  for (const p of catRows) {
+    try { await api(path, { method: "POST", body: JSON.stringify({ product_id: p.id }) }); done++; } catch {}
+    btnMsg.textContent = `Lade till ${done}/${catRows.length}…`;
+  }
+  btnMsg.textContent = `Klart — ${done} tillagda.`;
+  if (path === "/api/bistand" && typeof loadBistand === "function") loadBistand();
+}
+document.getElementById("cat-bulk-underlag").addEventListener("click", () => bulkImport("/api/bistand"));
+document.getElementById("cat-bulk-bevaka").addEventListener("click", () => bulkImport("/api/watch"));
 
 document.getElementById("cat-search-btn").addEventListener("click", () => {
   catState.q = document.getElementById("cat-q").value;
@@ -487,7 +522,70 @@ async function openProduct(id) {
     }
   };
   body.appendChild(add);
+
+  const watch = document.createElement("button");
+  watch.type = "button";
+  watch.textContent = "Bevaka pris";
+  watch.onclick = async () => {
+    watch.disabled = true;
+    try {
+      await api("/api/watch", { method: "POST", body: JSON.stringify({ product_id: id }) });
+      watch.textContent = "✓ Bevakas";
+    } catch (err) {
+      watch.disabled = false; watch.textContent = "Fel — försök igen";
+    }
+  };
+  body.appendChild(watch);
 }
+
+// ── Prisbevakning ─────────────────────────────────────────────────────────
+
+async function loadWatches() {
+  const rows = await api("/api/watch");
+  const list = document.getElementById("watch-list");
+  list.innerHTML = rows.length ? "" : '<li class="hint">Inga bevakade produkter än.</li>';
+  for (const r of rows) {
+    const li = document.createElement("li");
+    li.className = "catalog-row";
+    li.innerHTML = `<span><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title ?? "(namnlös)")}</a> — ${formatPrice(r.current_price)}</span>`;
+    const rm = document.createElement("button");
+    rm.type = "button"; rm.className = "link-btn"; rm.textContent = "Sluta bevaka";
+    rm.onclick = async () => { await api(`/api/watch/${r.id}`, { method: "DELETE" }); loadWatches(); };
+    li.appendChild(rm);
+    list.appendChild(li);
+  }
+}
+
+async function loadChannels() {
+  const rows = await api("/api/channels");
+  const list = document.getElementById("channel-list");
+  list.innerHTML = rows.length ? "" : '<li class="hint">Inga kanaler än.</li>';
+  for (const c of rows) {
+    const li = document.createElement("li");
+    li.className = "catalog-row";
+    const shown = c.target.length > 40 ? c.target.slice(0, 40) + "…" : c.target;
+    li.innerHTML = `<span><strong>${escapeHtml(c.kind)}</strong> — ${escapeHtml(shown)}</span>`;
+    const rm = document.createElement("button");
+    rm.type = "button"; rm.className = "link-btn"; rm.textContent = "Ta bort";
+    rm.onclick = async () => { await api(`/api/channels/${c.id}`, { method: "DELETE" }); loadChannels(); };
+    li.appendChild(rm);
+    list.appendChild(li);
+  }
+}
+
+document.getElementById("channel-add-btn").addEventListener("click", async () => {
+  const kind = document.getElementById("channel-kind").value;
+  const target = document.getElementById("channel-target").value;
+  const msg = document.getElementById("channel-msg");
+  try {
+    await api("/api/channels", { method: "POST", body: JSON.stringify({ kind, target }) });
+    document.getElementById("channel-target").value = "";
+    msg.textContent = "Kanal tillagd.";
+    loadChannels();
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
 
 document.getElementById("modal-close").addEventListener("click", () => {
   document.getElementById("product-modal").hidden = true;

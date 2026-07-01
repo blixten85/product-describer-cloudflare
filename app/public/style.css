@@ -106,6 +106,10 @@ button {
 .describe-mode-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; cursor: pointer; }
 .describe-mode-row input { width: auto; margin: 0; }
 .describe-mode-row span { font-size: 0.95rem; }
+.channel-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.channel-add select { width: auto; }
+.channel-add input { flex: 1; min-width: 140px; }
+.channel-add button { width: auto; white-space: nowrap; }
 .motivation-input { margin-top: 6px; }
 .btn-link {
   display: inline-block;
@@ -166,6 +170,9 @@ button {
 }
 .dept-link:hover { background: rgba(255, 255, 255, 0.05); }
 .cat-pager { display: flex; justify-content: space-between; margin-top: 12px; }
+.cat-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.cat-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.9rem; color: var(--hint); margin: 4px 0 8px; }
+.catalog-row { gap: 8px; }
 #product-modal {
   position: fixed;
   inset: 0;

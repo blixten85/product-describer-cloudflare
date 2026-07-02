@@ -61,3 +61,21 @@ export async function requireAccount(env: Env, request: Request) {
   const token = getSessionTokenFromCookie(request);
   return getAccountFromSession(env, token);
 }
+
+// Enkel per-IP-räknare i KV (SESSIONS) mot brute-force på inloggning och
+// massregistrering. Inte atomisk — samtidiga anrop kan tappa en inkrement —
+// men det räcker för att strypa scriptade attacker. Returnerar true om anropet
+// ska tillåtas. TTL:n förnyas vid varje träff (glidande fönster).
+export async function allowRateLimited(
+  env: Env,
+  bucket: string,
+  ip: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<boolean> {
+  const key = `rl:${bucket}:${ip}`;
+  const current = Number((await env.SESSIONS.get(key)) ?? "0");
+  if (current >= limit) return false;
+  await env.SESSIONS.put(key, String(current + 1), { expirationTtl: windowSeconds });
+  return true;
+}

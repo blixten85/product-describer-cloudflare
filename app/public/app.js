@@ -217,7 +217,12 @@ async function loadJobs() {
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // ── Bistånds-underlag ─────────────────────────────────────────────────────
@@ -369,9 +374,10 @@ document.getElementById("catalog-q").addEventListener("keydown", (e) => {
 });
 
 // Pollar jobblistan var 5s medan appen är synlig — motsvarar sidans
-// tidigare polling i Flask-versionens index.html.
+// tidigare polling i Flask-versionens index.html. Bara för admin: /api/jobs är
+// admin-only, så en poll för vanliga konton gav bara 403 var 5:e sekund.
 setInterval(() => {
-  if (!document.getElementById("app-view").hidden) loadJobs();
+  if (isAdmin && !document.getElementById("app-view").hidden) loadJobs();
 }, 5000);
 
 // ── Avdelningar (hamburgermeny) ───────────────────────────────────────────

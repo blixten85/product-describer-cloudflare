@@ -97,7 +97,7 @@ export async function createJob(
 
 export async function getJobsForAccount(db: D1Database, accountId: string): Promise<Job[]> {
   const { results } = await db
-    .prepare("SELECT * FROM jobs WHERE account_id = ? ORDER BY created_at DESC")
+    .prepare("SELECT * FROM jobs WHERE account_id = ? ORDER BY created_at DESC LIMIT 200")
     .bind(accountId)
     .all<Job>();
   return results;

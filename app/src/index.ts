@@ -3,7 +3,7 @@
 // validerar, sparar till R2/D1 och lägger ett "extract"-meddelande i kön;
 // processor-Workern (../processor/src/index.ts) gör det faktiska arbetet.
 
-import { signup, login, logout, requireAccount, createSession } from "./auth";
+import { signup, login, logout, requireAccount, createSession, allowRateLimited } from "./auth";
 import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
 import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
@@ -263,7 +263,15 @@ function redirectTo(location: string): Response {
   return new Response(null, { status: 302, headers: { Location: location } });
 }
 
+function clientIp(request: Request): string {
+  return request.headers.get("CF-Connecting-IP") || "unknown";
+}
+
 async function handleSignup(request: Request, env: Env): Promise<Response> {
+  // Massregistrering rundar annars 5-förslags-spärren och fyller kontotabellen.
+  if (!(await allowRateLimited(env, "signup", clientIp(request), 5, 3600))) {
+    return json({ error: "För många registreringar. Försök igen om en stund." }, 429);
+  }
   const data = await request.json<{ email?: string; password?: string }>().catch(() => ({}) as { email?: string; password?: string });
   try {
     const { accountId } = await signup(env, data.email ?? "", data.password ?? "");
@@ -275,6 +283,10 @@ async function handleSignup(request: Request, env: Env): Promise<Response> {
 }
 
 async function handleLogin(request: Request, env: Env): Promise<Response> {
+  // Bromsa lösenordsgissning. Appen är publik (ingen Access-grind längre).
+  if (!(await allowRateLimited(env, "login", clientIp(request), 10, 600))) {
+    return json({ error: "För många inloggningsförsök. Försök igen om en stund." }, 429);
+  }
   const data = await request.json<{ email?: string; password?: string }>().catch(() => ({}) as { email?: string; password?: string });
   try {
     const { sessionToken } = await login(env, data.email ?? "", data.password ?? "");
@@ -420,7 +432,9 @@ async function handleDownloadJob(env: Env, accountId: string, jobId: string): Pr
   if (!job || job.account_id !== accountId || !job.output_key) return json({ error: "Ingen fil att ladda ner" }, 404);
   const obj = await env.UPLOADS.get(job.output_key);
   if (!obj) return json({ error: "Filen hittades inte" }, 404);
-  const stem = job.filename.replace(/\.[^.]+$/, "");
+  // Sanera filnamnet: ett " i det uppladdade namnet skulle annars bryta
+  // quoted-string i headern (och kunde smuggla in extra header-parametrar).
+  const stem = job.filename.replace(/\.[^.]+$/, "").replace(/[^\w.\- ]+/g, "_") || "resultat";
   return new Response(obj.body, {
     headers: {
       "content-type": "text/csv",

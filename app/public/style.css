@@ -221,5 +221,7 @@ button {
   border: 1px solid var(--accent);
   border-radius: 8px;
 }
-.stod-swish { margin-top: 20px; }
-.swish-qr { display: block; width: 220px; max-width: 100%; height: auto; border-radius: 12px; margin-top: 8px; }
+.stod-qrs { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px; }
+.stod-qrs figure { margin: 0; }
+.stod-qrs figcaption { color: var(--hint); font-size: 0.85rem; margin-bottom: 6px; }
+.donate-qr { display: block; width: 220px; max-width: 100%; height: auto; border-radius: 12px; }

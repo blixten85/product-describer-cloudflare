@@ -51,6 +51,7 @@
     <button class="dept-link" data-dept="forslag">Föreslå sida</button>
     <button class="dept-link" data-dept="faq">FAQ</button>
     <button class="dept-link" data-dept="stod">Stötta tjänsten</button>
+    <button class="dept-link" data-dept="admin" hidden>Admin</button>
   </nav>
 
   <section id="dept-verktyg" class="dept">
@@ -226,6 +227,38 @@
           <img src="/paypal-qr.jpeg" alt="PayPal QR-kod" class="donate-qr"></figure>
         <figure><figcaption>Swish</figcaption>
           <img src="/swish-qr.png" alt="Swish QR-kod" class="donate-qr"></figure>
+      </div>
+    </div>
+  </section>
+  <section id="dept-admin" class="dept" hidden>
+    <div class="card">
+      <h2>Statistik</h2>
+      <div id="admin-stats" class="stat-grid"></div>
+      <h3 class="chart-title">Nya konton per dag (30 dagar)</h3>
+      <div id="chart-accounts" class="chart-wrap"></div>
+      <h3 class="chart-title">Genererade beskrivningar per dag (30 dagar)</h3>
+      <div id="chart-descriptions" class="chart-wrap"></div>
+      <h3 class="chart-title">Loggade prispunkter per dag (14 dagar)</h3>
+      <div id="chart-prices" class="chart-wrap"></div>
+    </div>
+    <div class="card">
+      <h2>Konton</h2>
+      <p class="hint">Senaste 500. Rollbyte slår igenom direkt.</p>
+      <div class="table-scroll">
+        <table class="admin-table">
+          <thead><tr><th>E-post</th><th>Roll</th><th>Skapad</th><th>Jobb</th><th>Bevakn.</th><th>Underlag</th><th></th></tr></thead>
+          <tbody id="admin-accounts"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Export</h2>
+      <p class="hint">Katalogen exporteras utan source_text/beskrivningstext (bara flagga) — annars blir filen orimligt stor.</p>
+      <div class="cat-actions">
+        <a class="link-btn" href="/api/admin/export/products" download>Produkter (CSV)</a>
+        <a class="link-btn" href="/api/admin/export/products?format=json" download>Produkter (JSON)</a>
+        <a class="link-btn" href="/api/admin/export/accounts" download>Konton (CSV)</a>
+        <a class="link-btn" href="/api/admin/export/accounts?format=json" download>Konton (JSON)</a>
       </div>
     </div>
   </section>

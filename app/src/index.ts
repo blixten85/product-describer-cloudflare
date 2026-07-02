@@ -9,6 +9,7 @@ import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from 
 import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeProduct } from "./catalog";
 import { submitSuggestion, listSuggestions, setSuggestionStatus } from "./suggestions";
+import { adminStats, adminAccounts, setAccountRole, exportProducts, exportAccounts } from "./admin";
 import { listWatches, addWatch, removeWatch, listChannels, addChannel, removeChannel } from "./watch";
 import {
   configuredProviders,
@@ -74,6 +75,26 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   // för alla inloggade.
   if (/^\/api\/(settings|upload|jobs)(\/|$)/.test(pathname) && account.role !== "admin") {
     return json({ error: "Endast administratör" }, 403);
+  }
+
+  // Admin-panel: statistik, kontolista, export. Allt under /api/admin/* är
+  // admin-only — en gemensam grind istället för en per route.
+  if (pathname.startsWith("/api/admin/")) {
+    if (account.role !== "admin") return json({ error: "Endast administratör" }, 403);
+    if (pathname === "/api/admin/stats" && request.method === "GET") return json(await adminStats(env));
+    if (pathname === "/api/admin/accounts" && request.method === "GET") return json(await adminAccounts(env));
+    const roleMatch = pathname.match(/^\/api\/admin\/accounts\/([A-Za-z0-9_-]+)\/role$/);
+    if (roleMatch && request.method === "POST") {
+      const d = await request.json<{ role?: string }>().catch(() => ({}) as { role?: string });
+      const r = await setAccountRole(env, account.id, roleMatch[1], d.role ?? "");
+      return r.ok ? json({ ok: true }) : json({ error: r.error }, 400);
+    }
+    const expMatch = pathname.match(/^\/api\/admin\/export\/(products|accounts)$/);
+    if (expMatch && request.method === "GET") {
+      const format = url.searchParams.get("format") === "json" ? "json" : "csv";
+      return expMatch[1] === "products" ? exportProducts(env, format) : exportAccounts(env, format);
+    }
+    return json({ error: "Hittar inte" }, 404);
   }
 
   if (pathname === "/api/status" && request.method === "GET") return handleStatus(env, account);

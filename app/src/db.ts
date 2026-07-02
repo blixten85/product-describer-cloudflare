@@ -18,6 +18,10 @@ export interface Env {
   OAUTH_GOOGLE_CLIENT_SECRET?: string;
   OAUTH_MICROSOFT_CLIENT_ID?: string;
   OAUTH_MICROSOFT_CLIENT_SECRET?: string;
+  // Sidförslag-mail via Resend.
+  RESEND_API_KEY?: string;
+  MAIL_FROM?: string;
+  ADMIN_EMAIL?: string;
 }
 
 export interface Account {

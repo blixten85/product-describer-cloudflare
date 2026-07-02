@@ -180,3 +180,16 @@ CREATE TABLE bistand_items (
   PRIMARY KEY (account_id, product_id)
 );
 CREATE INDEX idx_bistand_account ON bistand_items(account_id);
+
+-- Fas: användar-inskickade sidförslag. En användare föreslår en sida; ett mail
+-- går till admin (godkännande-grind) innan något implementeras. status:
+-- pending | coded | approved | rejected.
+CREATE TABLE page_suggestions (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  email TEXT,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at INTEGER NOT NULL
+);

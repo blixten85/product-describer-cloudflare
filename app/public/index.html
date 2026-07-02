@@ -47,6 +47,7 @@
     <button class="dept-link" data-dept="underlag">Ansökningsunderlag</button>
     <button class="dept-link" data-dept="katalog">Katalog</button>
     <button class="dept-link" data-dept="bevakning">Prisbevakning</button>
+    <button class="dept-link" data-dept="forslag">Föreslå sida</button>
   </nav>
 
   <section id="dept-verktyg" class="dept">
@@ -171,6 +172,22 @@
     </div>
   </section>
 
+  <section id="dept-forslag" class="dept" hidden>
+    <div class="card">
+      <h2>Föreslå en sida</h2>
+      <p class="hint">Sakna du en funktion eller sida? Föreslå den — förslaget granskas innan något byggs.</p>
+      <form id="suggest-form">
+        <input type="text" id="suggest-title" placeholder="Kort titel…" required>
+        <textarea id="suggest-desc" rows="4" placeholder="Beskriv vad sidan ska göra…"></textarea>
+        <button type="submit">Skicka förslag</button>
+        <p class="hint" id="suggest-msg"></p>
+      </form>
+    </div>
+    <div class="card" id="suggest-admin-card" hidden>
+      <h2>Inkomna förslag</h2>
+      <ul id="suggest-list" class="bistand-list"></ul>
+    </div>
+  </section>
   <div id="product-modal" hidden>
     <div class="modal-backdrop"></div>
     <div class="modal-card">

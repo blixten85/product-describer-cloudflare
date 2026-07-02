@@ -37,7 +37,7 @@ on:
         description: "Vilken worker att deploya (eller 'all')"
         type: choice
         default: all
-        options: [all, app, engine, processor, sync, token-rotator]
+        options: [all, app, engine, processor, token-rotator]
 
 concurrency:
   group: deploy
@@ -71,7 +71,7 @@ jobs:
 
           if [ "$EVENT" = "workflow_dispatch" ]; then
             if [ "$CHOICE" = "all" ]; then
-              echo 'workers=["app","engine","processor","sync","token-rotator"]' >> "$GITHUB_OUTPUT"
+              echo 'workers=["app","engine","processor","token-rotator"]' >> "$GITHUB_OUTPUT"
             else
               echo "workers=[\"$CHOICE\"]" >> "$GITHUB_OUTPUT"
             fi
@@ -91,10 +91,10 @@ jobs:
           import json, sys
           changed = sys.argv[1].splitlines()
           workers = set()
-          shared_consumers = {"app", "engine", "processor", "sync"}
+          shared_consumers = {"app", "engine", "processor"}
           for f in changed:
               top = f.split("/", 1)[0]
-              if top in {"app", "engine", "processor", "sync", "token-rotator"}:
+              if top in {"app", "engine", "processor", "token-rotator"}:
                   workers.add(top)
               elif top == "shared":
                   workers |= shared_consumers

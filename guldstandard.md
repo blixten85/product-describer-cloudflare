@@ -24,7 +24,7 @@ nytt repo skapas — kopiera filerna, ANPASSA det som är repospecifikt
 
 ## .github/ (övrigt)
 
-- **`labeler.yml`** — universell STRUKTUR, men `changed-files`-mönstren måste matcha repots faktiska katalognamn (t.ex. `app/**`/`processor/**`/`sync/**` för en 3-Workers-uppdelning, inte `app/**`/`sender/**`).
+- **`labeler.yml`** — universell STRUKTUR, men `changed-files`-mönstren måste matcha repots faktiska katalognamn (t.ex. `app/**`/`processor/**`/`engine/**` per Worker, inte `app/**`/`sender/**`).
 - **`pull_request_template.md`** — universell, rakt av.
 - **`ISSUE_TEMPLATE/`** — universell, rakt av (bug_report + feature_request, både .md och .yml-varianter, plus `config.yml`).
 - **`FUNDING.yml`** — **REPOSPECIFIKT, kopiera ALDRIG rakt av.** politiker-webapp har en PayPal-länk kopplad till just den publika tjänsten. product-describer har bara `github: [blixten85]` (inget donationsflöde). Avgör per repo om en custom-länk är relevant.
@@ -38,7 +38,7 @@ nytt repo skapas — kopiera filerna, ANPASSA det som är repospecifikt
   - `pull_request`: `required_approving_review_count: 0` (inget krav på mänsklig review — CI + CodeRabbit räcker), `dismiss_stale_reviews_on_push: true`
   - `required_status_checks`: lista ALLA faktiska check-namn som körs (typecheck-jobben för varje worker, CodeQL:s `Analyze (...)`-rader per språk som faktiskt finns i repot, `CodeRabbit`) — **måste matcha exakt vad CI:t faktiskt heter i DETTA repo**, kopiera inte namnen rakt av.
 - **CodeQL default setup** (API: `PUT /repos/{owner}/{repo}/code-scanning/default-setup`) — `languages` ska bara innehålla språk som FAKTISKT finns i repot (`actions` + `javascript-typescript` för ett rent TS-repo, lägg till `python` bara om Python-kod finns).
-- **Labels**: standarduppsättningen (bug/documentation/duplicate/enhancement/good first issue/help wanted/invalid/question/wontfix — GitHubs defaults, rör inte) + `dependencies`, `github_actions` (eller motsvarande Renovate-grupperingsnamn), `ci`, `infra`, `claude` (`#6f42c1`, "PR created/fixed by Claude Code — eligible for auto-merge once CI is green"), samt en etikett per Worker/katalog (`app`, `sender`/`processor`/`sync` osv, matchar `labeler.yml`).
+- **Labels**: standarduppsättningen (bug/documentation/duplicate/enhancement/good first issue/help wanted/invalid/question/wontfix — GitHubs defaults, rör inte) + `dependencies`, `github_actions` (eller motsvarande Renovate-grupperingsnamn), `ci`, `infra`, `claude` (`#6f42c1`, "PR created/fixed by Claude Code — eligible for auto-merge once CI is green"), samt en etikett per Worker/katalog (`app`, `sender`/`processor`/`engine` osv, matchar `labeler.yml`).
 - **Repo-flaggor**: `delete_branch_on_merge: true`, alla tre merge-metoder tillåtna (`squash`/`merge`/`rebase`), `squash_merge_commit_title: COMMIT_OR_PR_TITLE`.
 
 ## Känt hål i denna standard (ej åtgärdat ännu)

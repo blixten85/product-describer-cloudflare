@@ -12,24 +12,25 @@ av [product-describer](https://github.com/blixten85/product-describer)
   **Cloudflare Queue** istället för en bakgrundstråd med ThreadPoolExecutor
   — Workers kan inte köra en flertimmars bakgrundsprocess i en enda
   invocation, så varje rad blir ett eget kö-meddelande istället
-- `sync --watch`-bakgrundspollern mot scraper-API:et → en **Cron Trigger**
-  (var 5:e minut) istället för en evig while-loop
+- Katalog-/beskrivningsloopen (f.d. `sync --watch` mot scraper-API:et) → en
+  **Cron Trigger** i `engine/` var 5:e minut, mot D1 istället för scraper-API:et
 
 ## Struktur
 
-Tre Workers:
+Workers:
 
-- `app/` — webb-UI + API (auth, inställningar, filuppladdning, jobblista/nedladdning). Lägger en `extract`-kö-post per uppladdning, gör inget extraktions-/AI-arbete själv.
+- `app/` — webb-UI + API (auth, inställningar, filuppladdning, jobblista/nedladdning, katalog, prisbevakning, bistånds-underlag, admin-panel). Lägger en `extract`-kö-post per uppladdning, gör inget extraktions-/AI-arbete själv.
 - `processor/` — kö-konsument. Extraherar produktrader ur uppladdade filer (CSV/XLSX/TXT/DOCX/PDF) och genererar en beskrivning per rad. Paus/återupptagning vid leverantörskvot hanteras via `queueMsg.retry({delaySeconds})`, inte en persisterad bakgrundstråd.
-- `sync/` — Cron Trigger var 5:e minut. Pollar scraper-API:et efter produkter utan beskrivning, genererar, skickar tillbaka. Använder miljövariabel-baserade nycklar (operatörens egna), inte kontobundna.
+- `engine/` — katalog-motorn. En Cron Trigger var 5:e minut driver crawl/discovery, schemaläggning av detaljjobb och prisbevakning mot D1, plus HTTP-endpoints som den serverbundna Playwright-fetchern anropar (lease/ack). On-demand-beskrivning via `POST /describe`. Använder operatörens egna miljövariabel-nycklar, inte kontobundna.
+- `token-rotator/` — Cron som förlänger Cloudflare API-tokens nära utgång så token-hygienen blir självgående.
 
 `shared/` — kod gemensam för flera Workers (kryptering, AI-providers, prompts, kontoinställningar). OBS: `extractors.ts` ligger i `processor/src/` istället för `shared/` trots att den konceptuellt är delad logik — TypeScripts modulupplösning för tredjepartsbibliotek (xlsx/mammoth/unpdf) söker bara uppåt i katalogträdet, så filer i `shared/` (ett syskon till `processor/`) kan inte hitta paket som bara finns i `processor/node_modules`.
 
 ## Automatisk felrapportering
 
 `github_report.py` är porterad till `shared/github-report.ts`: oväntade
-driftfel i `processor/` (kö-konsumentens topp-catch) och `sync/` (scraper-
-hämtning + tillbakaskrivning) öppnar en `@claude`-taggad GitHub-issue, med
+driftfel i `processor/` (kö-konsumentens topp-catch) och `engine/` (cron +
+fetcher-endpoints) öppnar en `@claude`-taggad GitHub-issue, med
 samma sanering (env-hemligheter, nyckelmönster, e-post, home-paths) och
 avdubblering via fingeravtryck som Flask-versionen. No-op om secreten
 `GITHUB_ERROR_REPORT_TOKEN` saknas — då loggas felen bara till
@@ -42,7 +43,6 @@ inte minne, så GitHub-sidans avdubblering är enda spärren.
 ```bash
 cd app && npm install && cp .dev.vars.example .dev.vars   # fyll i ett riktigt PROVIDER_CONFIG_KEY
 cd ../processor && npm install && cp .dev.vars.example .dev.vars  # samma nyckel som ovan
-cd ../sync && npm install
 
 openssl rand -base64 32   # generera PROVIDER_CONFIG_KEY
 ```
@@ -70,17 +70,16 @@ Kräver riktiga D1-/R2-/KV-/Queue-resurser provisionerade (database_id/kv id
 ```bash
 cd app && npx wrangler secret put PROVIDER_CONFIG_KEY && npx wrangler deploy
 cd ../processor && npx wrangler secret put PROVIDER_CONFIG_KEY && npx wrangler deploy   # samma värde som ovan
-cd ../sync && npx wrangler secret put SCRAPER_API_KEY
-npx wrangler secret put ANTHROPIC_API_KEY   # och/eller OPENAI_API_KEY/GEMINI_API_KEY
+cd ../engine && npx wrangler secret put INGEST_API_KEY   # operatörsnyckel för fetcher-endpoints
+npx wrangler secret put GEMINI_API_KEY   # och/eller ANTHROPIC_API_KEY/OPENAI_API_KEY för beskriv-steget
 npx wrangler secret put GITHUB_ERROR_REPORT_TOKEN   # valfritt: auto-felrapportering (även i processor/)
 npx wrangler deploy
 ```
 
-`sync`s `SCRAPER_URL` pekar på `https://scraper-api.denied.se` (publikt
-tunnlat på mp100, skyddat av `X-API-Key`) — se `infra/` för bakgrund om
-scraper-tjänsten själv (som INTE flyttas till Cloudflare: Playwright-baserad
-webbskrapning och Postgres-specifika SQL-funktioner gör den inte
-migrerbar, se commit-historiken för den bedömningen).
+Själva renderingen (Playwright-baserad webbskrapning) flyttas INTE till
+Cloudflare — den körs som en statslös fetcher på mp100 som leasar `render_jobs`
+från `engine/` och postar tillbaka resultat (skyddat av `X-API-Key`). Se
+`DESIGN.md` för arkitekturen.
 
 ## Verifierat lokalt (denna migrering)
 
@@ -92,5 +91,5 @@ migrerbar, se commit-historiken för den bedömningen).
   fastna eller krascha)
 - PDF-extraktion (`unpdf`) mot riktiga flersidiga PDF-filer
 - **Inte** verifierat: en riktig, fungerande AI-nyckel end-to-end (testades
-  bara med en avsiktligt ogiltig nyckel), produktionsdeploy, sync-Workerns
+  bara med en avsiktligt ogiltig nyckel), produktionsdeploy, `engine`-Workerns
   Cron Trigger i verklig drift

@@ -8,7 +8,11 @@
 // irrelevant för en ny installation där kryptering alltid är på.
 
 import { encryptSecret, decryptSecret } from "./crypto";
-import { ProviderChain, type ProviderSpec, type ProviderCreds } from "./providers";
+import { ProviderChain, type ProviderSpec, type ProviderCreds, type ProviderName } from "./providers";
+
+// Single source of truth: ProviderName definieras i providers.ts. Re-exporteras
+// här så att befintliga importvägar (../../shared/provider-config) fortsätter funka.
+export type { ProviderName };
 
 // Minimal struktur som täcker både app- och processor-Workerns Env — denna
 // fil ska kunna användas av båda utan att bero på endera sidans fullständiga
@@ -17,8 +21,6 @@ export interface ProviderConfigEnv {
   DB: D1Database;
   PROVIDER_CONFIG_KEY: string;
 }
-
-export type ProviderName = "anthropic" | "openai" | "gemini" | "azure_openai";
 
 export const PROVIDER_NAMES: ProviderName[] = ["anthropic", "openai", "gemini", "azure_openai"];
 

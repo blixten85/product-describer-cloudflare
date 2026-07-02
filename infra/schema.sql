@@ -81,7 +81,6 @@ CREATE TABLE sites (
   title_selector TEXT NOT NULL DEFAULT '',
   price_selector TEXT NOT NULL DEFAULT '',
   link_selector TEXT NOT NULL DEFAULT '',
-  pagination_selector TEXT NOT NULL DEFAULT '',
   detail_selector TEXT NOT NULL DEFAULT '',   -- per-sajt CSS för produktbeskrivning (B.2)
   -- Crawl/discovery (list-jobb). Speglar scraper_config i postgres.
   pagination_type TEXT NOT NULL DEFAULT 'query',   -- 'query' (?page=N) | annat -> enkelsida
@@ -139,11 +138,6 @@ CREATE TABLE render_jobs (
 );
 -- Snabbt urval av leasbara jobb (pending, eller leased med utgången lease).
 CREATE INDEX idx_render_jobs_claimable ON render_jobs(status, lease_until);
-
-CREATE TABLE alert_cooldown (
-  product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
-  last_alert INTEGER NOT NULL
-);
 
 -- Avd. B prisbevakning: en rad per (konto, bevakad produkt). last_alert håller
 -- cooldown per bevakning (så samma prisfall inte larmas om och om).

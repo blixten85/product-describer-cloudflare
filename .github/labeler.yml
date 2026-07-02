@@ -6,9 +6,13 @@ processor:
   - changed-files:
     - any-glob-to-any-file: 'processor/**'
 
-sync:
+engine:
   - changed-files:
-    - any-glob-to-any-file: 'sync/**'
+    - any-glob-to-any-file: 'engine/**'
+
+token-rotator:
+  - changed-files:
+    - any-glob-to-any-file: 'token-rotator/**'
 
 shared:
   - changed-files:

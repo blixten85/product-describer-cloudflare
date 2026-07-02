@@ -62,7 +62,7 @@ async function exchangeCodeForUserInfo(
   provider: string,
   env: Env,
   code: string,
-): Promise<{ providerUserId: string; email: string }> {
+): Promise<{ providerUserId: string; email: string; emailVerified: boolean }> {
   const cfg = PROVIDERS[provider];
   if (!cfg) throw new Error("Okänd leverantör");
   const clientId = env[cfg.clientIdEnvKey] as string | undefined;
@@ -92,13 +92,20 @@ async function exchangeCodeForUserInfo(
   const providerUserId = String(userData.sub ?? userData.id ?? "");
   const email = (userData.email as string | undefined) ?? null;
   if (!providerUserId || !email) throw new Error(`Kunde inte hämta identitet från ${provider}`);
-  return { providerUserId, email };
+  // Leverantören kan hävda en e-post som användaren inte bevisat att den äger
+  // (klassisk "nOAuth": sätt valfri e-post i profilen och logga in). Vi litar
+  // bara på verified-flaggan när vi länkar till ett BEFINTLIGT lösenordskonto.
+  // Google skickar email_verified (boolean eller "true"); saknas den (t.ex.
+  // Microsofts userinfo) behandlas e-posten som overifierad.
+  const rawVerified = userData.email_verified ?? userData.verified_email;
+  const emailVerified = rawVerified === true || rawVerified === "true";
+  return { providerUserId, email, emailVerified };
 }
 
 // Login-callback: matcha känd identitet -> annars länka på e-post -> annars nytt
 // konto (med slumpat oanvändbart lösenord). Returnerar konto-id att skapa session för.
 export async function handleOAuthCallback(provider: string, env: Env, code: string): Promise<{ accountId: string }> {
-  const { providerUserId, email } = await exchangeCodeForUserInfo(provider, env, code);
+  const { providerUserId, email, emailVerified } = await exchangeCodeForUserInfo(provider, env, code);
 
   const existing = await env.DB.prepare(
     "SELECT account_id FROM oauth_identities WHERE provider = ? AND provider_user_id = ?",
@@ -110,6 +117,14 @@ export async function handleOAuthCallback(provider: string, env: Env, code: stri
   const account = await getAccountByEmail(env.DB, email);
   let accountId: string;
   if (account) {
+    // Länkning till ett befintligt konto kräver att leverantören intygar att
+    // e-posten är verifierad — annars kunde en angripare ta över kontot genom
+    // att sätta offrets e-post i sin egen IdP-profil.
+    if (!emailVerified) {
+      throw new Error(
+        `${provider} kunde inte bekräfta att e-postadressen är verifierad. Logga in med lösenord i stället.`,
+      );
+    }
     accountId = account.id;
   } else {
     accountId = randomId();

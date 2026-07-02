@@ -14,7 +14,17 @@ export async function hashPassword(password: string): Promise<{ hash: string; sa
 
 export async function verifyPassword(password: string, hash: string, salt: string): Promise<boolean> {
   const computed = await pbkdf2(password, fromBase64(salt));
-  return toBase64(computed) === hash;
+  return constantTimeEqual(toBase64(computed), hash);
+}
+
+// Konstant-tidsjämförelse så att verifieringen inte läcker hur många ledande
+// tecken av hashen som stämmer via svarstiden. PBKDF2 dominerar visserligen
+// tiden, men jämförelsen kostar inget att göra korrekt.
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 async function pbkdf2(password: string, salt: Uint8Array): Promise<ArrayBuffer> {
@@ -80,23 +90,4 @@ export function randomId(): string {
   return toBase64(crypto.getRandomValues(new Uint8Array(16)))
     .replace(/[+/=]/g, "")
     .slice(0, 22);
-}
-
-export function randomVerificationCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// API-nycklar är hög-entropi slumptokens, inte mänskliga lösenord — vanlig
-// snabb SHA-256 räcker (samma praxis som GitHub/Stripe), ingen PBKDF2 behövs.
-export async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export function generateApiKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  const token = toBase64(bytes).replace(/[+/=]/g, "");
-  return `pwapi_${token}`;
 }

@@ -206,3 +206,20 @@ button {
 #cat-category { margin: 4px 0 8px; }
 
 .logo-mark { height: 1.1em; width: 1.1em; vertical-align: -0.15em; margin-right: 6px; }
+/* FAQ */
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.02);
+}
+/* Stötta tjänsten */
+.stod-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.stod-btn {
+  margin-top: 0;
+  padding: 10px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+.stod-swish { margin-top: 20px; }
+.swish-qr { display: block; width: 220px; max-width: 100%; height: auto; border-radius: 12px; margin-top: 8px; }

@@ -49,6 +49,8 @@
     <button class="dept-link" data-dept="katalog">Katalog</button>
     <button class="dept-link" data-dept="bevakning">Prisbevakning</button>
     <button class="dept-link" data-dept="forslag">Föreslå sida</button>
+    <button class="dept-link" data-dept="faq">FAQ</button>
+    <button class="dept-link" data-dept="stod">Stötta tjänsten</button>
   </nav>
 
   <section id="dept-verktyg" class="dept">
@@ -187,6 +189,42 @@
     <div class="card" id="suggest-admin-card" hidden>
       <h2>Inkomna förslag</h2>
       <ul id="suggest-list" class="bistand-list"></ul>
+    </div>
+  </section>
+  <section id="dept-faq" class="dept" hidden>
+    <div class="card">
+      <h2>Vanliga frågor</h2>
+      <details><summary>Vad är Product Describer?</summary>
+        <p>En tjänst som genererar produktbeskrivningar med AI, bläddrar i en produktkatalog, bevakar priser och hjälper dig att sammanställa ett utskrivbart underlag till socialtjänsten.</p></details>
+      <details><summary>Vad kostar det?</summary>
+        <p>Att bläddra i katalogen, bevaka priser och skapa underlag är gratis. För att generera egna AI-beskrivningar lägger du till din egen API-nyckel (t.ex. Gemini) under Beskriv-verktyg — du betalar då leverantören direkt för din användning.</p></details>
+      <details><summary>Varför måste jag lägga till en egen API-nyckel för beskrivningar?</summary>
+        <p>Beskrivningar körs mot betalda AI-leverantörer. För att tjänsten ska vara gratis att driva använder varje konto sin egen nyckel. Redan genererade (cachade) beskrivningar visas gratis för alla.</p></details>
+      <details><summary>Var kommer produkterna ifrån?</summary>
+        <p>Katalogen byggs genom att automatiskt hämta publika produktsidor (t.ex. Webhallen, IKEA) med pris, kategori och länk. Priser uppdateras löpande så att prisbevakningen fungerar.</p></details>
+      <details><summary>Hur fungerar prisbevakningen?</summary>
+        <p>Lägg till en produkt via "Bevaka pris" i katalogen. Du får ett larm när priset faller minst 5 % och minst 100 kr. Larm skickas till de kanaler du lägger till (ntfy, Slack, Telegram eller webhook).</p></details>
+      <details><summary>Vad är "Ansökningsunderlag"?</summary>
+        <p>Du väljer produkter ur katalogen, skriver en motivering per produkt och skapar en utskrivbar sida (skriv ut / spara som PDF) att skicka till socialtjänsten.</p></details>
+      <details><summary>Kan jag föreslå en ny funktion?</summary>
+        <p>Ja — via "Föreslå sida". Förslaget granskas manuellt innan något byggs.</p></details>
+      <details><summary>Hur loggar jag in?</summary>
+        <p>Med e-post och lösenord, eller med Google/Microsoft.</p></details>
+    </div>
+  </section>
+
+  <section id="dept-stod" class="dept" hidden>
+    <div class="card stod-card">
+      <h2>Stötta tjänsten</h2>
+      <p class="hint">Tjänsten är gratis att använda. Vill du hjälpa till att täcka drift- och API-kostnader är en gåva varmt uppskattad.</p>
+      <div class="stod-options">
+        <a class="btn-link stod-btn" href="https://www.paypal.com/paypalme/anders0225/25" target="_blank" rel="noopener">Ge via PayPal (25 kr) →</a>
+        <a class="btn-link stod-btn" href="https://whydonate.com/sv/donate/product-describer" target="_blank" rel="noopener">Ge via WhyDonate →</a>
+      </div>
+      <div class="stod-swish">
+        <p>Eller swisha:</p>
+        <img src="/swish-qr.png" alt="Swish QR-kod" class="swish-qr">
+      </div>
     </div>
   </section>
   <div id="product-modal" hidden>

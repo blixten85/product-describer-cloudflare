@@ -223,3 +223,43 @@ button {
 }
 .stod-swish { margin-top: 20px; }
 .swish-qr { display: block; width: 220px; max-width: 100%; height: auto; border-radius: 12px; margin-top: 8px; }
+/* ── Admin-panel ─────────────────────────────────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.stat-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.stat-box .n {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.stat-box .l { font-size: 0.78rem; color: var(--hint); }
+.stat-lines { line-height: 1.7; margin: 0 0 8px; }
+.chart-title { font-size: 0.95rem; margin: 16px 0 4px; }
+.chart-wrap { width: 100%; }
+.chart { width: 100%; height: 110px; display: block; }
+.chart rect { fill: var(--accent); }
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--hint);
+}
+.table-scroll { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.admin-table th, .admin-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.admin-table th { color: var(--hint); font-weight: 500; }

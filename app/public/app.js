@@ -64,6 +64,8 @@ async function showApp(status) {
   // Beskriv-verktyget (provider-nycklar/uppladdning/jobb) är bara för admin.
   const verktygLink = document.querySelector('.dept-link[data-dept="verktyg"]');
   if (verktygLink) verktygLink.hidden = !isAdmin;
+  const adminLink = document.querySelector('.dept-link[data-dept="admin"]');
+  if (adminLink) adminLink.hidden = !isAdmin;
   const tasks = [loadBistand()];
   if (isAdmin) tasks.push(loadSettings(), loadJobs());
   await Promise.all(tasks);
@@ -380,6 +382,7 @@ function showDept(name) {
   if (name === "katalog" && !catalogLoaded) { loadCategories(); loadCatalog(); }
   if (name === "bevakning") { loadWatches(); loadChannels(); }
   if (name === "forslag") loadSuggestions();
+  if (name === "admin") loadAdmin();
 }
 
 document.getElementById("hamburger-btn").addEventListener("click", () => {
@@ -665,6 +668,117 @@ async function loadSuggestions() {
     list.appendChild(li);
   }
 }
+// ── Admin-panel ───────────────────────────────────────────────────────────
+
+const STAT_LABELS = [
+  ["accounts.total", "Konton"],
+  ["accounts.new_30d", "Nya konton (30 d)"],
+  ["products.total", "Produkter"],
+  ["products.described", "Med beskrivning"],
+  ["products.with_source", "Med källtext"],
+  ["price_points", "Prispunkter"],
+  ["watches", "Bevakningar"],
+  ["channels", "Larmkanaler"],
+  ["bistand", "Underlagsposter"],
+  ["sites_enabled", "Aktiva sajter"],
+];
+
+function statValue(stats, path) {
+  return path.split(".").reduce((o, k) => (o == null ? o : o[k]), stats) ?? 0;
+}
+
+function statusLine(map, labels) {
+  return Object.entries(map || {})
+    .map(([k, n]) => `${labels[k] ?? k}: ${n}`)
+    .join(" · ") || "—";
+}
+
+// Enkel SVG-stapelgraf. Fyller ut dagar utan datapunkter med 0 så att
+// tidsaxeln blir jämn.
+function barChart(el, points, days) {
+  const byDay = Object.fromEntries((points || []).map((p) => [p.d, p.n]));
+  const series = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    series.push({ d, n: byDay[d] ?? 0 });
+  }
+  const W = 640, H = 110, pad = 1.5;
+  const max = Math.max(...series.map((p) => p.n), 1);
+  const bw = W / series.length;
+  const bars = series
+    .map((p, i) => {
+      const h = Math.max(p.n > 0 ? 2 : 0, Math.round((p.n / max) * (H - 14)));
+      return `<rect x="${(i * bw + pad).toFixed(1)}" y="${H - h}" width="${(bw - 2 * pad).toFixed(1)}" height="${h}"><title>${p.d}: ${p.n}</title></rect>`;
+    })
+    .join("");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="chart">${bars}</svg><div class="chart-axis"><span>${series[0].d}</span><span>max ${max}</span><span>${series[series.length - 1].d}</span></div>`;
+}
+
+async function loadAdmin() {
+  let stats;
+  try {
+    stats = await api("/api/admin/stats");
+  } catch (err) {
+    document.getElementById("admin-stats").innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+
+  const grid = document.getElementById("admin-stats");
+  grid.innerHTML = "";
+  for (const [path, label] of STAT_LABELS) {
+    const box = document.createElement("div");
+    box.className = "stat-box";
+    box.innerHTML = `<span class="n">${Number(statValue(stats, path)).toLocaleString("sv-SE")}</span><span class="l">${label}</span>`;
+    grid.appendChild(box);
+  }
+  document.getElementById("admin-stat-lines")?.remove();
+  const lines = document.createElement("div");
+  lines.id = "admin-stat-lines";
+  lines.className = "stat-lines hint";
+  lines.innerHTML = [
+    `<strong>Jobb:</strong> ${escapeHtml(statusLine(stats.jobs, STATUS_LABELS))}`,
+    `<strong>Render-kö:</strong> ${escapeHtml(statusLine(stats.render_jobs, { pending: "Väntar", leased: "Pågår", done: "Klara", error: "Fel" }))}`,
+    `<strong>Förslag:</strong> ${escapeHtml(statusLine(stats.suggestions, { pending: "Väntar", approved: "Godkända", rejected: "Avslagna", coded: "Kodade" }))}`,
+  ].join("<br>");
+  grid.after(lines);
+
+  barChart(document.getElementById("chart-accounts"), stats.series.accounts_30d, 30);
+  barChart(document.getElementById("chart-descriptions"), stats.series.descriptions_30d, 30);
+  barChart(document.getElementById("chart-prices"), stats.series.price_points_14d, 14);
+
+  await loadAdminAccounts();
+}
+
+async function loadAdminAccounts() {
+  const rows = await api("/api/admin/accounts");
+  const tbody = document.getElementById("admin-accounts");
+  tbody.innerHTML = "";
+  for (const a of rows) {
+    const tr = document.createElement("tr");
+    const created = new Date(a.created_at).toISOString().slice(0, 10);
+    tr.innerHTML = `<td>${escapeHtml(a.email)}</td><td>${escapeHtml(a.role)}</td><td>${created}</td><td>${a.jobs}</td><td>${a.watches}</td><td>${a.bistand}</td>`;
+    const td = document.createElement("td");
+    const newRole = a.role === "admin" ? "user" : "admin";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "link-btn";
+    btn.textContent = newRole === "admin" ? "Gör till admin" : "Gör till user";
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await api(`/api/admin/accounts/${a.id}/role`, { method: "POST", body: JSON.stringify({ role: newRole }) });
+        loadAdminAccounts();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = err.message;
+      }
+    };
+    td.appendChild(btn);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+}
+
 (async function init() {
   try {
     const status = await api("/api/status");

@@ -204,3 +204,5 @@ button {
 #modal-body a { color: var(--accent); }
 
 #cat-category { margin: 4px 0 8px; }
+
+.logo-mark { height: 1.1em; width: 1.1em; vertical-align: -0.15em; margin-right: 6px; }

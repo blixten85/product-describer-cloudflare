@@ -379,6 +379,7 @@ function showDept(name) {
   document.getElementById("dept-drawer").hidden = true;
   if (name === "katalog" && !catalogLoaded) { loadCategories(); loadCatalog(); }
   if (name === "bevakning") { loadWatches(); loadChannels(); }
+  if (name === "forslag") loadSuggestions();
 }
 
 document.getElementById("hamburger-btn").addEventListener("click", () => {
@@ -618,6 +619,52 @@ if (oauthError) {
   history.replaceState(null, "", location.pathname);
 }
 
+// ── Sidförslag ────────────────────────────────────────────────────────────
+document.getElementById("suggest-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("suggest-msg");
+  const title = document.getElementById("suggest-title").value;
+  const description = document.getElementById("suggest-desc").value;
+  try {
+    await api("/api/suggestions", { method: "POST", body: JSON.stringify({ title, description }) });
+    e.target.reset();
+    msg.textContent = "Tack! Ditt förslag har skickats för granskning.";
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+async function loadSuggestions() {
+  const card = document.getElementById("suggest-admin-card");
+  if (!isAdmin) { card.hidden = true; return; }
+  card.hidden = false;
+  const rows = await api("/api/suggestions");
+  const list = document.getElementById("suggest-list");
+  list.innerHTML = rows.length ? "" : '<li class="hint">Inga förslag än.</li>';
+  for (const r of rows) {
+    const li = document.createElement("li");
+    li.className = "bistand-row";
+    const head = document.createElement("div");
+    head.className = "bistand-head";
+    head.innerHTML = `<span><strong>${escapeHtml(r.title)}</strong> — <span class="muted">${escapeHtml(r.status)}</span><br><small class="muted">${escapeHtml(r.email || "")}</small></span>`;
+    li.appendChild(head);
+    if (r.description) {
+      const d = document.createElement("p");
+      d.className = "hint";
+      d.textContent = r.description;
+      li.appendChild(d);
+    }
+    const actions = document.createElement("div");
+    actions.className = "cat-actions";
+    for (const st of ["approved", "rejected", "coded"]) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "link-btn"; b.textContent = st;
+      b.onclick = async () => { await api(`/api/suggestions/${r.id}`, { method: "PATCH", body: JSON.stringify({ status: st }) }); loadSuggestions(); };
+      actions.appendChild(b);
+    }
+    li.appendChild(actions);
+    list.appendChild(li);
+  }
+}
 (async function init() {
   try {
     const status = await api("/api/status");

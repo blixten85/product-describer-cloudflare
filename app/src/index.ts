@@ -8,6 +8,7 @@ import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
 import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeProduct } from "./catalog";
+import { submitSuggestion, listSuggestions, setSuggestionStatus } from "./suggestions";
 import { listWatches, addWatch, removeWatch, listChannels, addChannel, removeChannel } from "./watch";
 import {
   configuredProviders,
@@ -150,6 +151,23 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     return json({ ok: true });
   }
 
+  // Sidförslag: alla inloggade får föreslå; admin listar/bedömer.
+  if (pathname === "/api/suggestions" && request.method === "POST") {
+    const d = await request.json<{ title?: string; description?: string }>().catch(() => ({}) as { title?: string; description?: string });
+    const r = await submitSuggestion(env, account.id, account.email, d.title ?? "", d.description ?? "");
+    return r.ok ? json({ ok: true }) : json({ error: r.error ?? "Kunde inte spara" }, 400);
+  }
+  if (pathname === "/api/suggestions" && request.method === "GET") {
+    if (account.role !== "admin") return json({ error: "Endast administratör" }, 403);
+    return json(await listSuggestions(env));
+  }
+  const sugMatch = pathname.match(/^\/api\/suggestions\/([A-Za-z0-9_-]+)$/);
+  if (sugMatch && request.method === "PATCH") {
+    if (account.role !== "admin") return json({ error: "Endast administratör" }, 403);
+    const d = await request.json<{ status?: string }>().catch(() => ({}) as { status?: string });
+    await setSuggestionStatus(env, sugMatch[1], d.status ?? "");
+    return json({ ok: true });
+  }
   return json({ error: "Hittar inte" }, 404);
 }
 

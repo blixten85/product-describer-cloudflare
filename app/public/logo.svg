@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="#f0a500" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- prislapp -->
+  <path d="M30 6 H14 a4 4 0 0 0 -4 4 V26 a4 4 0 0 0 1.2 2.8 L34 51.6 a4 4 0 0 0 5.6 0 L54 37.2 a4 4 0 0 0 0 -5.6 L31.2 8.8 A4 4 0 0 0 30 6 Z"/>
+  <!-- hål -->
+  <circle cx="20" cy="17" r="3"/>
+  <!-- text-linjer -->
+  <path d="M27 24 H41 M27 31 H44 M27 38 H39" stroke-width="2.4"/>
+  <!-- gnistra -->
+  <path d="M50 10 l1.6 4.4 4.4 1.6 -4.4 1.6 -1.6 4.4 -1.6 -4.4 -4.4 -1.6 4.4 -1.6 Z" stroke-width="1.6" fill="#f0a500"/>
+</svg>

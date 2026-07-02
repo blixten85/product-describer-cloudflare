@@ -8,8 +8,8 @@
     "secret:set-admin": "wrangler secret put CF_ADMIN_TOKEN"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.0.0",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.0.0"
+    "@cloudflare/workers-types": "4.20260630.1",
+    "typescript": "6.0.3",
+    "wrangler": "4.105.0"
   }
 }

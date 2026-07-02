@@ -623,7 +623,10 @@ export default {
 
       return json({ error: "okänd route" }, 404);
     } catch (err) {
-      return json({ error: String(err instanceof Error ? err.message : err) }, 500);
+      // Logga detaljen server-side men exponera aldrig råa felmeddelanden
+      // (kan läcka interna sökvägar/stacktrace) i svaret.
+      console.error("engine fetch-fel:", err);
+      return json({ error: "internt fel" }, 500);
     }
   },
 } satisfies ExportedHandler<Env>;

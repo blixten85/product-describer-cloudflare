@@ -24,6 +24,13 @@ export async function submitSuggestion(
 ): Promise<{ ok: boolean; error?: string }> {
   const t = title.trim();
   if (!t) return { ok: false, error: "Titel krävs" };
+  // Spärr: max 5 väntande förslag per konto (hindrar inbox-flooding).
+  const pending = await env.DB.prepare(
+    "SELECT count(*) n FROM page_suggestions WHERE account_id = ?1 AND status = 'pending'",
+  )
+    .bind(accountId)
+    .first<{ n: number }>();
+  if ((pending?.n ?? 0) >= 5) return { ok: false, error: "Du har redan 5 väntande förslag — avvakta granskning." };
   const id = randomId();
   await env.DB.prepare(
     "INSERT INTO page_suggestions (id, account_id, email, title, description, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6)",

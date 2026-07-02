@@ -110,7 +110,7 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   }
   const descMatch = pathname.match(/^\/api\/produkt\/(\d+)\/describe$/);
   if (descMatch && request.method === "POST") {
-    const { status, ...body } = await describeProduct(env, account.id, Number(descMatch[1]));
+    const { status, ...body } = await describeProduct(env, account.id, account.role === "admin", Number(descMatch[1]));
     return json(body, status);
   }
   if (pathname === "/api/describe-mode" && request.method === "POST") {

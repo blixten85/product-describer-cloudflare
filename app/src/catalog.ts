@@ -45,7 +45,7 @@ interface DescribeResult {
 // operatören inte betalar för andras användning — samma princip som CSV-verktyget),
 // annars proxas till engine (operatörens delade Gemini-nyckel, gratis-tier).
 // Resultatet cachas i products.description (delad katalog) -> nästa läsning gratis.
-export async function describeProduct(env: Env, accountId: string, id: number): Promise<DescribeResult> {
+export async function describeProduct(env: Env, accountId: string, isAdmin: boolean, id: number): Promise<DescribeResult> {
   const p = await env.DB.prepare(
     "SELECT id, title, category, source_text, description, description_why FROM products WHERE id = ?1",
   )
@@ -55,7 +55,14 @@ export async function describeProduct(env: Env, accountId: string, id: number): 
   if (p.description) return { beskrivning: p.description, varför: p.description_why ?? "", status: 200 };
 
   const chain = await buildChain(env, accountId);
-  if (!chain) return describeViaEngine(env, id); // inget eget nyckel -> operatörens engine
+  // Egen nyckel -> använd den. Ingen egen nyckel: bara admin (operatören) får
+  // falla tillbaka på engine-Gemini; publika konton måste lägga egen nyckel,
+  // annars kan de spamma bort operatörens delade gratis-kvot. Redan cachade
+  // beskrivningar syns ändå gratis (returneras ovan).
+  if (!chain) {
+    if (isAdmin) return describeViaEngine(env, id);
+    return { error: "Lägg till en egen API-nyckel under Beskriv-verktyg för att generera beskrivningar", status: 403 };
+  }
 
   try {
     const parts = await chain.generate(

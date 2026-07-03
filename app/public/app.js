@@ -263,9 +263,18 @@ async function searchCatalog() {
 }
 
 let currentBistand = [];
+const BISTAND_PAGE = 25;
+const bistandState = { offset: 0 };
 
 async function loadBistand() {
-  currentBistand = await api("/api/bistand");
+  const { items, total } = await api(`/api/bistand?limit=${BISTAND_PAGE}&offset=${bistandState.offset}`);
+  // Om vi hamnat förbi sista sidan (t.ex. efter att ha tagit bort rader) — backa.
+  if (items.length === 0 && bistandState.offset > 0) {
+    bistandState.offset = Math.max(0, bistandState.offset - BISTAND_PAGE);
+    return loadBistand();
+  }
+  currentBistand = items;
+  renderBistandPager(total);
   const list = document.getElementById("bistand-list");
   list.innerHTML = "";
   for (const r of currentBistand) {
@@ -301,8 +310,9 @@ async function loadBistand() {
     list.appendChild(li);
   }
 
-  // Beskriv de produkter i underlaget som saknar beskrivning. I auto-läge körs
-  // det direkt vid inläsning; annars via knapp.
+  // Beskriv de produkter på DEN HÄR SIDAN som saknar beskrivning. I auto-läge
+  // körs det direkt vid inläsning; annars via knapp. Sidindelningen håller nere
+  // hur många som beskrivs i taget.
   const missing = currentBistand.filter((r) => !r.description);
   const genWrap = document.getElementById("bistand-generate");
   genWrap.innerHTML = "";
@@ -322,6 +332,26 @@ async function loadBistand() {
     genWrap.insertBefore(btn, status);
   }
 }
+
+// Sidkontroller för underlaget: göm helt när allt får plats på en sida.
+function renderBistandPager(total) {
+  const pager = document.getElementById("bistand-pager");
+  if (total <= BISTAND_PAGE) { pager.hidden = true; return; }
+  pager.hidden = false;
+  const start = bistandState.offset + 1;
+  const end = Math.min(bistandState.offset + BISTAND_PAGE, total);
+  document.getElementById("bistand-info").textContent = `${start}–${end} av ${total}`;
+  document.getElementById("bistand-prev").disabled = bistandState.offset === 0;
+  document.getElementById("bistand-next").disabled = end >= total;
+}
+document.getElementById("bistand-prev").addEventListener("click", () => {
+  bistandState.offset = Math.max(0, bistandState.offset - BISTAND_PAGE);
+  loadBistand();
+});
+document.getElementById("bistand-next").addEventListener("click", () => {
+  bistandState.offset += BISTAND_PAGE;
+  loadBistand();
+});
 
 let describing = false;
 async function runDescribeMissing(missing, statusEl) {

@@ -54,6 +54,7 @@ button {
   cursor: pointer;
   padding: 4px 8px;
 }
+.link-btn:disabled { color: var(--hint); cursor: default; opacity: 0.5; }
 .link { text-align: center; }
 .header-links {
   display: flex;

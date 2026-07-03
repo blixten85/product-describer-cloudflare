@@ -6,7 +6,7 @@
 import { signup, login, logout, requireAccount, createSession, allowRateLimited } from "./auth";
 import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
-import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, bulkAddBistand, renderUnderlag } from "./bistand";
+import { searchCatalog, listCategories, listBistandPage, upsertBistand, removeBistand, bulkAddBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeProduct } from "./catalog";
 import { submitSuggestion, listSuggestions, setSuggestionStatus } from "./suggestions";
 import { adminStats, adminAccounts, setAccountRole, exportProducts, exportAccounts, adminSites, updateSite } from "./admin";
@@ -176,7 +176,11 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     await removeChannel(env, account.id, chMatch[1]);
     return json({ ok: true });
   }
-  if (pathname === "/api/bistand" && request.method === "GET") return json(await listBistand(env, account.id));
+  if (pathname === "/api/bistand" && request.method === "GET") {
+    const limit = Number(url.searchParams.get("limit")) || 25;
+    const offset = Number(url.searchParams.get("offset")) || 0;
+    return json(await listBistandPage(env, account.id, limit, offset));
+  }
   if (pathname === "/api/bistand" && request.method === "POST") return handleAddBistand(request, env, account.id);
   if (pathname === "/api/bistand/bulk" && request.method === "POST") {
     const d = await request.json<{ q?: string; category?: string }>().catch(() => ({}) as { q?: string; category?: string });

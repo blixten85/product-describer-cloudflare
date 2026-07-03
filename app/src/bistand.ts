@@ -64,6 +64,8 @@ export async function listCategories(env: Env): Promise<{ category: string; n: n
   return results ?? [];
 }
 
+// Hela underlaget (osidat) — används av renderUnderlag() så utskriften innehåller
+// alla produkter. Webb-UI:t använder listBistandPage() i stället.
 export async function listBistand(env: Env, accountId: string): Promise<BistandRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT p.id, p.url, p.title, p.current_price, p.description, b.motivation
@@ -73,6 +75,31 @@ export async function listBistand(env: Env, accountId: string): Promise<BistandR
     .bind(accountId)
     .all<BistandRow>();
   return results ?? [];
+}
+
+// Sidindelad hämtning för webb-UI:t. Ett underlag kan innehålla väldigt många
+// produkter, och att rendera alla på en gång (en textarea + ev. beskrivnings-
+// generering per rad) laggar sönder sidan — därför LIMIT/OFFSET plus totalen så
+// klienten kan rita sidkontroller.
+export async function listBistandPage(
+  env: Env,
+  accountId: string,
+  limit: number,
+  offset: number,
+): Promise<{ items: BistandRow[]; total: number }> {
+  const lim = Math.max(1, Math.min(100, limit | 0));
+  const off = Math.max(0, offset | 0);
+  const { results } = await env.DB.prepare(
+    `SELECT p.id, p.url, p.title, p.current_price, p.description, b.motivation
+     FROM bistand_items b JOIN products p ON p.id = b.product_id
+     WHERE b.account_id = ?1 ORDER BY b.created_at LIMIT ?2 OFFSET ?3`,
+  )
+    .bind(accountId, lim, off)
+    .all<BistandRow>();
+  const total = await env.DB.prepare("SELECT count(*) AS n FROM bistand_items WHERE account_id = ?1")
+    .bind(accountId)
+    .first<{ n: number }>();
+  return { items: results ?? [], total: total?.n ?? 0 };
 }
 
 // Lägg till / uppdatera motivering. Verifierar att produkten finns (FK skulle

@@ -19,8 +19,15 @@ export interface BistandRow extends CatalogRow {
 }
 
 // Bygger WHERE-klausulen för katalog-filtret (titel-sök + kategori). Delas av
-// sidbläddringen och bulk-importen så de träffar exakt samma urval. Positionella
-// ?-parametrar (binds i ordning).
+// bulk-importerna (bistånd + bevakning) så de träffar exakt samma urval.
+// Positionella ?-parametrar (binds i ordning).
+//
+// WHERE-klausulen är ALLTID med och faller tillbaka på "WHERE true" när inget
+// filter är satt. Bulk-importerna kör INSERT ... SELECT ... ON CONFLICT, och om
+// SELECT saknar WHERE kan SQLite/D1 inte avgöra om "ON" inleder UPSERT-klausulen
+// eller en JOIN-ON — parsern kvävs då på "DO" ("near \"DO\": syntax error").
+// Se sqlite.org/lang_UPSERT.html ("... should always include a WHERE clause,
+// even if that WHERE clause is just WHERE true").
 export function catalogFilter(q: string, category: string): { whereSql: string; binds: (string | number)[] } {
   const query = q.trim();
   const cat = category.trim();
@@ -28,7 +35,7 @@ export function catalogFilter(q: string, category: string): { whereSql: string; 
   const binds: (string | number)[] = [];
   if (query) { where.push("title LIKE ?"); binds.push(`%${query}%`); }
   if (cat) { where.push("category = ?"); binds.push(cat); }
-  return { whereSql: where.length ? ` WHERE ${where.join(" AND ")}` : "", binds };
+  return { whereSql: ` WHERE ${where.length ? where.join(" AND ") : "true"}`, binds };
 }
 
 // Sök i katalogen på titel + valfritt kategori-filter. offset för sidbläddring.

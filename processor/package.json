@@ -8,9 +8,9 @@
     "secret:set-provider-key": "wrangler secret put PROVIDER_CONFIG_KEY"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260625.1",
+    "@cloudflare/workers-types": "4.20260629.1",
     "typescript": "6.0.3",
-    "wrangler": "4.104.0"
+    "wrangler": "4.105.0"
   },
   "dependencies": {
     "mammoth": "^1.12.0",

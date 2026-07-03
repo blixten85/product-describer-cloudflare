@@ -8,6 +8,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# En körning per PR: en ny commit/label avbryter den gamla pollern (deploy-after-
+# merge) i stället för att stapla flera 20-min-jobb. Olika PR:er körs parallellt.
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   dependabot:
     runs-on: ubuntu-latest
@@ -125,6 +131,44 @@ jobs:
             echo "attempt $i failed, retrying in 60s..."
             sleep 60
           done
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
+
+  # Så fort en auto-mergad PR faktiskt landat: fyra deployen direkt. GitHubs
+  # loopskydd hindrar bot-mergens push från att trigga deploy.yml, men
+  # repository_dispatch är undantaget som GITHUB_TOKEN får skicka — så deployen
+  # blir omedelbar utan PAT. Villkoret speglar unionen av auto-merge-jobben ovan.
+  deploy-after-merge:
+    runs-on: ubuntu-latest
+    if: >-
+      github.actor == 'dependabot[bot]' ||
+      contains(github.head_ref, 'alert-autofix') ||
+      startsWith(github.head_ref, 'claude/') ||
+      contains(github.event.pull_request.labels.*.name, 'claude') ||
+      (github.event.pull_request.user.login == 'blixten85' && startsWith(github.head_ref, 'fix/')) ||
+      startsWith(github.head_ref, 'codex/') ||
+      startsWith(github.head_ref, 'copilot/')
+    steps:
+      - name: Vänta på att mergen landar, fyra sedan deployen
+        run: |
+          # Pollar tills auto-mergen landat (checks gröna -> GitHub mergar).
+          # Avbryts av concurrency om PR:en får en ny commit. ~20 min tak;
+          # missas det ändå tar schema-cronen i deploy.yml vid.
+          for i in $(seq 1 40); do
+            state="$(gh pr view "$PR_URL" --json state -q .state 2>/dev/null || echo '')"
+            case "$state" in
+              MERGED)
+                gh api -X POST "repos/${{ github.repository }}/dispatches" -f event_type=deploy-main
+                echo "Merge landad — deploy dispatchad."
+                exit 0 ;;
+              CLOSED)
+                echo "PR stängd utan merge — ingen deploy."
+                exit 0 ;;
+            esac
+            sleep 30
+          done
+          echo "Timeout — schema-cronen får ta deployen."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ github.token }}

@@ -169,3 +169,64 @@ export async function exportAccounts(env: Env, format: string): Promise<Response
   const rows = (await adminAccounts(env)) as unknown as Record<string, unknown>[];
   return exportResponse("konton", fields, rows, format);
 }
+
+// ── Sajt-administration (B.2) ───────────────────────────────────────────────
+// Crawlade sajter (products.site_id -> sites). detail_selector är en per-sajt
+// CSS-väljare som fetchern använder som första källa för produktens source_text
+// (annars JSON-LD -> og -> meta). Hela kedjan läser redan fältet (engine skickar
+// det vid lease, fetcher/fetcher.py honorerar det) — det saknades bara ett sätt
+// att sätta det utan att gå direkt på databasen.
+
+export interface AdminSiteRow {
+  id: number;
+  name: string;
+  base_url: string;
+  detail_selector: string;
+  use_stealth: number;
+  enabled: number;
+  scrape_interval: number;
+  last_crawled: number | null;
+  products: number;
+  described: number;
+  with_source: number;
+}
+
+export async function adminSites(env: Env): Promise<AdminSiteRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT s.id, s.name, s.base_url, s.detail_selector, s.use_stealth, s.enabled,
+            s.scrape_interval, s.last_crawled,
+            (SELECT count(*) FROM products p WHERE p.site_id = s.id) products,
+            (SELECT count(*) FROM products p WHERE p.site_id = s.id AND p.description IS NOT NULL) described,
+            (SELECT count(*) FROM products p WHERE p.site_id = s.id AND p.source_text IS NOT NULL) with_source
+     FROM sites s ORDER BY s.name`,
+  ).all<AdminSiteRow>();
+  return results ?? [];
+}
+
+// Uppdaterar bara de fält operatören rimligen justerar via UI:t — inte de
+// strukturella crawl-selektorerna (produkt/titel/pris/länk), som styr själva
+// upptäckten och hör till sajt-onboarding, inte den här snabbjusteringen.
+export async function updateSite(
+  env: Env,
+  id: number,
+  fields: { detail_selector?: string; use_stealth?: boolean; enabled?: boolean; scrape_interval?: number },
+): Promise<{ ok: boolean; error?: string }> {
+  const sets: string[] = [];
+  const binds: (string | number)[] = [];
+  if (typeof fields.detail_selector === "string") {
+    if (fields.detail_selector.length > 500) return { ok: false, error: "detail_selector för lång (max 500)" };
+    sets.push("detail_selector = ?");
+    binds.push(fields.detail_selector.trim());
+  }
+  if (typeof fields.use_stealth === "boolean") { sets.push("use_stealth = ?"); binds.push(fields.use_stealth ? 1 : 0); }
+  if (typeof fields.enabled === "boolean") { sets.push("enabled = ?"); binds.push(fields.enabled ? 1 : 0); }
+  if (typeof fields.scrape_interval === "number" && Number.isFinite(fields.scrape_interval)) {
+    // Minst 5 min — under det svälter cronen (*/5) sig själv.
+    sets.push("scrape_interval = ?");
+    binds.push(Math.max(300, Math.floor(fields.scrape_interval)));
+  }
+  if (sets.length === 0) return { ok: false, error: "Inget att uppdatera" };
+  const r = await env.DB.prepare(`UPDATE sites SET ${sets.join(", ")} WHERE id = ?`).bind(...binds, id).run();
+  if (!r.meta.changes) return { ok: false, error: "Sajten finns inte" };
+  return { ok: true };
+}

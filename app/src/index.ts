@@ -9,7 +9,7 @@ import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from 
 import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, bulkAddBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeProduct } from "./catalog";
 import { submitSuggestion, listSuggestions, setSuggestionStatus } from "./suggestions";
-import { adminStats, adminAccounts, setAccountRole, exportProducts, exportAccounts } from "./admin";
+import { adminStats, adminAccounts, setAccountRole, exportProducts, exportAccounts, adminSites, updateSite } from "./admin";
 import { listWatches, addWatch, removeWatch, bulkAddWatch, listChannels, addChannel, removeChannel } from "./watch";
 import {
   configuredProviders,
@@ -83,6 +83,13 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (account.role !== "admin") return json({ error: "Endast administratör" }, 403);
     if (pathname === "/api/admin/stats" && request.method === "GET") return json(await adminStats(env));
     if (pathname === "/api/admin/accounts" && request.method === "GET") return json(await adminAccounts(env));
+    if (pathname === "/api/admin/sites" && request.method === "GET") return json(await adminSites(env));
+    const siteMatch = pathname.match(/^\/api\/admin\/sites\/(\d+)$/);
+    if (siteMatch && request.method === "POST") {
+      const d = await request.json<{ detail_selector?: string; use_stealth?: boolean; enabled?: boolean; scrape_interval?: number }>().catch(() => ({}));
+      const r = await updateSite(env, Number(siteMatch[1]), d);
+      return r.ok ? json({ ok: true }) : json({ error: r.error }, 400);
+    }
     const roleMatch = pathname.match(/^\/api\/admin\/accounts\/([A-Za-z0-9_-]+)\/role$/);
     if (roleMatch && request.method === "POST") {
       const d = await request.json<{ role?: string }>().catch(() => ({}) as { role?: string });

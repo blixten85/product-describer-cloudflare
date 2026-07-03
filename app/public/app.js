@@ -769,6 +769,67 @@ async function loadAdmin() {
   barChart(document.getElementById("chart-prices"), stats.series.price_points_14d, 14);
 
   await loadAdminAccounts();
+  await loadAdminSites();
+}
+
+async function loadAdminSites() {
+  const rows = await api("/api/admin/sites");
+  const tbody = document.getElementById("admin-sites");
+  tbody.innerHTML = "";
+  for (const s of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td><a href="${escapeHtml(s.base_url)}" target="_blank" rel="noopener">${escapeHtml(s.name)}</a></td>` +
+      `<td>${s.products}</td><td>${s.with_source}</td>`;
+
+    const selTd = document.createElement("td");
+    const sel = document.createElement("input");
+    sel.type = "text";
+    sel.className = "site-selector-input";
+    sel.value = s.detail_selector || "";
+    sel.placeholder = "t.ex. .product-description";
+    selTd.appendChild(sel);
+    tr.appendChild(selTd);
+
+    const stealthTd = document.createElement("td");
+    const stealth = document.createElement("input");
+    stealth.type = "checkbox";
+    stealth.checked = !!s.use_stealth;
+    stealthTd.appendChild(stealth);
+    tr.appendChild(stealthTd);
+
+    const enabledTd = document.createElement("td");
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox";
+    enabled.checked = !!s.enabled;
+    enabledTd.appendChild(enabled);
+    tr.appendChild(enabledTd);
+
+    const actTd = document.createElement("td");
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "link-btn";
+    save.textContent = "Spara";
+    save.onclick = async () => {
+      save.disabled = true;
+      save.textContent = "Sparar…";
+      try {
+        await api(`/api/admin/sites/${s.id}`, {
+          method: "POST",
+          body: JSON.stringify({ detail_selector: sel.value, use_stealth: stealth.checked, enabled: enabled.checked }),
+        });
+        save.textContent = "✓ Sparat";
+      } catch (err) {
+        save.disabled = false;
+        save.textContent = err.message;
+      }
+    };
+    actTd.appendChild(save);
+    tr.appendChild(actTd);
+
+    tbody.appendChild(tr);
+  }
+  if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="7" class="hint">Inga sajter konfigurerade.</td></tr>';
 }
 
 async function loadAdminAccounts() {

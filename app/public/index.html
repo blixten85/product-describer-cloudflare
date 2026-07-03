@@ -260,6 +260,16 @@
       </div>
     </div>
     <div class="card">
+      <h2>Sajter</h2>
+      <p class="hint"><code>detail_selector</code> = CSS-väljare som fetchern använder som första källa för produkttexten (annars JSON-LD → og → meta). Sätt den för butiker där den automatiska texten blir dålig. Tomt = bara heuristik. Ändringar sparas per rad.</p>
+      <div class="table-scroll">
+        <table class="admin-table">
+          <thead><tr><th>Sajt</th><th>Produkter</th><th>m. källtext</th><th>detail_selector</th><th>Stealth</th><th>Aktiv</th><th></th></tr></thead>
+          <tbody id="admin-sites"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
       <h2>Export</h2>
       <p class="hint">Katalogen exporteras utan source_text/beskrivningstext (bara flagga) — annars blir filen orimligt stor.</p>
       <div class="cat-actions">

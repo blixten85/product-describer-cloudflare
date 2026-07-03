@@ -265,3 +265,5 @@ button {
   white-space: nowrap;
 }
 .admin-table th { color: var(--hint); font-weight: 500; }
+.site-selector-input { width: 100%; min-width: 160px; padding: 4px 6px; margin: 0; font-size: 0.85rem; font-family: ui-monospace, monospace; }
+.admin-table td input[type="checkbox"] { width: auto; margin: 0; }

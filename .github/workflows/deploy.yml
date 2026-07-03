@@ -4,11 +4,13 @@ name: Deploy
 # wrangler.jsonc); bara de vars kod ändrats deployas. shared/ triggar de Workers
 # som importerar den.
 #
-# VARFÖR SCHEMA I STÄLLET FÖR push/pull_request: auto-merge görs av
-# github-actions[bot] med GITHUB_TOKEN, vars events (både push OCH
-# pull_request-closed) INTE triggar andra workflows (loopskydd). En event-trigger
-# skulle alltså missa varje auto-merge. Repot är publikt -> Actions-minuter är
-# gratis, så en poll var 10:e min kostar inget.
+# HUR DEPLOYEN TRIGGAS: bot-auto-merge görs av github-actions[bot] med
+# GITHUB_TOKEN, vars push/pull_request-events INTE triggar andra workflows
+# (GitHubs loopskydd). Undantaget är repository_dispatch/workflow_dispatch — dem
+# FÅR GITHUB_TOKEN fyra. Därför fyrar Bot Auto-Merge en
+# `repository_dispatch: deploy-main` så fort mergen landat, vilket når hit direkt
+# utan PAT. Människo-merges/direkta pushar fångas av push:[main] (riktig
+# användartoken, inte suppressad). En gles schema-cron är sista skyddsnät.
 #
 # EXAKT-EN-GÅNG: en flyttbar git-tagg `deployed` är vattenmärke för senast
 # deployade commit. Varje körning deployar diffen deployed..HEAD och flyttar
@@ -22,13 +24,16 @@ name: Deploy
 # vars och bindings uppdateras.
 
 on:
-  # Snabb väg: fyrar när Bot Auto-Merge kör (dess workflow_run-event suppas INTE
-  # av loopskyddet, till skillnad från push/pull_request). Tagg-vattenmärket gör
-  # att detta bara deployar när main faktiskt avancerat -> ofarligt att fyra ofta.
-  workflow_run:
-    workflows: ["Bot Auto-Merge"]
-    types: [completed]
-  # Långsam fallback ifall GitHub-cron ändå kör (ökänt opålitligt på publika repon).
+  # Människo-merges och direkta pushar till main (riktig användartoken triggar
+  # push; bot-auto-merges gör det INTE — de fångas av repository_dispatch nedan).
+  push:
+    branches: [main]
+  # Bot-auto-merges: Bot Auto-Merge fyrar detta så fort mergen faktiskt landat.
+  # Enda vägen GITHUB_TOKEN når hit direkt (utan PAT) — se toppkommentaren.
+  repository_dispatch:
+    types: [deploy-main]
+  # Sista skyddsnät om ovanstående missas (GitHub-cron är opålitlig på publika
+  # repon, så detta är backup — inte primärvägen längre).
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
@@ -59,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: main   # workflow_run checkar annars ut triggande PR:ens SHA
+          ref: main   # deploya alltid main-HEAD, oavsett vilket event som fyrade
           fetch-depth: 0
       - id: pick
         env:
@@ -112,7 +117,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: main   # deploya alltid main, inte triggande PR:ens SHA (workflow_run)
+          ref: main   # deploya alltid main-HEAD, oavsett vilket event som fyrade
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24.18.0

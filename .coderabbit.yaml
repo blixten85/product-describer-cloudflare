@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit ska INTE granska varje push automatiskt — det slog i deras
+# review-rate-limit och la en misslyckad "CodeRabbit"-commit-status på PR:erna.
+# Granskning sker nu på begäran: kommentera "@coderabbitai review" på en PR.
+reviews:
+  auto_review:
+    enabled: false

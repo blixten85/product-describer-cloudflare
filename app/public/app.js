@@ -320,16 +320,22 @@ async function loadBistand() {
 
   const status = document.createElement("p");
   status.className = "hint";
-  genWrap.appendChild(status);
 
-  if (describeMode === "auto") {
+  // Auto-läget körs bara om det inte just misslyckats (autoDescribeBlocked) —
+  // annars skulle en trasig nyckel/slut kvot ge en oändlig omförsöks-loop
+  // (varje misslyckande laddar om listan, som i auto-läge startar om körningen).
+  // Efter ett fel faller vi tillbaka på en manuell knapp.
+  if (describeMode === "auto" && !autoDescribeBlocked) {
+    genWrap.appendChild(status);
     await runDescribeMissing(missing, status);
   } else {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = `Generera saknade beskrivningar (${missing.length})`;
-    btn.onclick = () => { btn.disabled = true; runDescribeMissing(missing, status); };
-    genWrap.insertBefore(btn, status);
+    btn.onclick = () => { autoDescribeBlocked = false; btn.disabled = true; runDescribeMissing(missing, status); };
+    genWrap.appendChild(btn);
+    genWrap.appendChild(status);
+    if (lastDescribeError) status.textContent = lastDescribeError;
   }
 }
 
@@ -353,10 +359,25 @@ document.getElementById("bistand-next").addEventListener("click", () => {
   loadBistand();
 });
 
+// Gör ett rått provider-fel läsbart: känn igen de vanliga orsakerna och korta
+// ner allt annat så vi aldrig dumpar en hel JSON-payload i UI:t.
+function friendlyDescribeError(msg) {
+  if (!msg) return "okänt fel";
+  if (/API[_ ]?key.*(not valid|invalid)|API_KEY_INVALID/i.test(msg)) {
+    return "ogiltig API-nyckel — kontrollera din nyckel under Beskriv-verktyg.";
+  }
+  if (/kvot|quota|rate.?limit|\b429\b/i.test(msg)) return "AI-kvoten är slut — försök igen senare.";
+  const firstLine = msg.split("\n")[0].trim();
+  return firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
+}
+
 let describing = false;
+let autoDescribeBlocked = false;
+let lastDescribeError = "";
 async function runDescribeMissing(missing, statusEl) {
   if (describing) return;
   describing = true;
+  lastDescribeError = "";
   let done = 0;
   for (const r of missing) {
     statusEl.textContent = `Genererar ${done + 1}/${missing.length}…`;
@@ -364,7 +385,10 @@ async function runDescribeMissing(missing, statusEl) {
       await api(`/api/produkt/${r.id}/describe`, { method: "POST" });
       done++;
     } catch (err) {
-      statusEl.textContent = `Stannade vid ${done}/${missing.length}: ${err.message}`;
+      // Blockera auto-läget så omladdningen nedan inte startar om körningen på
+      // nytt (annars oändlig loop). Användaren får en "Generera"-knapp i stället.
+      lastDescribeError = `Stannade vid ${done}/${missing.length}: ${friendlyDescribeError(err.message)}`;
+      autoDescribeBlocked = true;
       describing = false;
       await loadBistand();
       return;
@@ -391,6 +415,7 @@ function setupDescribeToggle() {
     try {
       await api("/api/describe-mode", { method: "POST", body: JSON.stringify({ mode }) });
       describeMode = mode;
+      autoDescribeBlocked = false; // uttrycklig växling = börja om från rent blad
       if (mode === "auto") await loadBistand();
     } catch (err) {
       toggle.checked = !toggle.checked;

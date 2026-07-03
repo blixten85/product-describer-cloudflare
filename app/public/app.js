@@ -460,6 +460,22 @@ async function bulkImport(path) {
 document.getElementById("cat-bulk-underlag").addEventListener("click", () => bulkImport("/api/bistand"));
 document.getElementById("cat-bulk-bevaka").addEventListener("click", () => bulkImport("/api/watch"));
 
+// Importera HELA katalogen (matchande nuvarande sök/kategori) i en knapptryckning
+// — server-side INSERT ... SELECT, inte sida-för-sida.
+async function bulkImportAll(path, msgId) {
+  const btnMsg = document.getElementById(msgId);
+  btnMsg.textContent = "Importerar hela katalogen…";
+  try {
+    const r = await api(path, { method: "POST", body: JSON.stringify({ q: catState.q, category: catState.category }) });
+    btnMsg.textContent = `Klart — ${r.added} tillagda.`;
+    if (path === "/api/bistand/bulk" && typeof loadBistand === "function") loadBistand();
+  } catch (e) {
+    btnMsg.textContent = e.message;
+  }
+}
+document.getElementById("cat-bulkall-underlag").addEventListener("click", () => bulkImportAll("/api/bistand/bulk", "cat-bulkall-msg"));
+document.getElementById("cat-bulkall-bevaka").addEventListener("click", () => bulkImportAll("/api/watch/bulk", "cat-bulkall-msg"));
+
 async function loadCategories() {
   const cats = await api("/api/categories");
   const sel = document.getElementById("cat-category");

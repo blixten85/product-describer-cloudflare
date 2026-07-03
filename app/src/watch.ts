@@ -1,6 +1,7 @@
 // Avd. B — prisbevakning (app-sidan). Kontot bevakar produkter och konfigurerar
 // larmkanaler; engine-cronen (checkPriceDrops) sköter detektering + utskick.
 import { randomId } from "../../shared/crypto";
+import { catalogFilter } from "./bistand";
 import type { Env } from "./db";
 
 export interface WatchRow {
@@ -36,6 +37,20 @@ export async function removeWatch(env: Env, accountId: string, productId: number
   await env.DB.prepare("DELETE FROM price_watch WHERE account_id = ?1 AND product_id = ?2")
     .bind(accountId, productId)
     .run();
+}
+
+// Bevaka HELA katalogen (matchande nuvarande filter) på en gång, server-side.
+// INSERT ... SELECT; redan bevakade hoppas över. Returnerar antal nya rader.
+export async function bulkAddWatch(env: Env, accountId: string, q: string, category: string): Promise<number> {
+  const { whereSql, binds } = catalogFilter(q, category);
+  const r = await env.DB.prepare(
+    `INSERT INTO price_watch (account_id, product_id, created_at)
+     SELECT ?, id, ? FROM products${whereSql}
+     ON CONFLICT DO NOTHING`,
+  )
+    .bind(accountId, Date.now(), ...binds)
+    .run();
+  return r.meta.changes ?? 0;
 }
 
 const KINDS = new Set(["ntfy", "slack", "telegram", "webhook"]);

@@ -6,11 +6,11 @@
 import { signup, login, logout, requireAccount, createSession, allowRateLimited } from "./auth";
 import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
-import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, renderUnderlag } from "./bistand";
+import { searchCatalog, listCategories, listBistand, upsertBistand, removeBistand, bulkAddBistand, renderUnderlag } from "./bistand";
 import { getProduct, describeProduct } from "./catalog";
 import { submitSuggestion, listSuggestions, setSuggestionStatus } from "./suggestions";
 import { adminStats, adminAccounts, setAccountRole, exportProducts, exportAccounts } from "./admin";
-import { listWatches, addWatch, removeWatch, listChannels, addChannel, removeChannel } from "./watch";
+import { listWatches, addWatch, removeWatch, bulkAddWatch, listChannels, addChannel, removeChannel } from "./watch";
 import {
   configuredProviders,
   getProviderConfig,
@@ -148,6 +148,11 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     const ok = await addWatch(env, account.id, Number(data.product_id));
     return ok ? json({ ok: true }) : json({ error: "Produkten finns inte" }, 404);
   }
+  if (pathname === "/api/watch/bulk" && request.method === "POST") {
+    const d = await request.json<{ q?: string; category?: string }>().catch(() => ({}) as { q?: string; category?: string });
+    const added = await bulkAddWatch(env, account.id, d.q ?? "", d.category ?? "");
+    return json({ ok: true, added });
+  }
   const watchMatch = pathname.match(/^\/api\/watch\/(\d+)$/);
   if (watchMatch && request.method === "DELETE") {
     await removeWatch(env, account.id, Number(watchMatch[1]));
@@ -166,6 +171,11 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   }
   if (pathname === "/api/bistand" && request.method === "GET") return json(await listBistand(env, account.id));
   if (pathname === "/api/bistand" && request.method === "POST") return handleAddBistand(request, env, account.id);
+  if (pathname === "/api/bistand/bulk" && request.method === "POST") {
+    const d = await request.json<{ q?: string; category?: string }>().catch(() => ({}) as { q?: string; category?: string });
+    const added = await bulkAddBistand(env, account.id, d.q ?? "", d.category ?? "");
+    return json({ ok: true, added });
+  }
   const bistandMatch = pathname.match(/^\/api\/bistand\/(\d+)$/);
   if (bistandMatch && request.method === "DELETE") {
     await removeBistand(env, account.id, Number(bistandMatch[1]));

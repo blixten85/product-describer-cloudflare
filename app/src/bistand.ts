@@ -18,6 +18,19 @@ export interface BistandRow extends CatalogRow {
   motivation: string;
 }
 
+// Bygger WHERE-klausulen för katalog-filtret (titel-sök + kategori). Delas av
+// sidbläddringen och bulk-importen så de träffar exakt samma urval. Positionella
+// ?-parametrar (binds i ordning).
+export function catalogFilter(q: string, category: string): { whereSql: string; binds: (string | number)[] } {
+  const query = q.trim();
+  const cat = category.trim();
+  const where: string[] = [];
+  const binds: (string | number)[] = [];
+  if (query) { where.push("title LIKE ?"); binds.push(`%${query}%`); }
+  if (cat) { where.push("category = ?"); binds.push(cat); }
+  return { whereSql: where.length ? ` WHERE ${where.join(" AND ")}` : "", binds };
+}
+
 // Sök i katalogen på titel + valfritt kategori-filter. offset för sidbläddring.
 export async function searchCatalog(env: Env, q: string, offset = 0, category = ""): Promise<CatalogRow[]> {
   const query = q.trim();
@@ -79,6 +92,21 @@ export async function removeBistand(env: Env, accountId: string, productId: numb
   await env.DB.prepare("DELETE FROM bistand_items WHERE account_id = ?1 AND product_id = ?2")
     .bind(accountId, productId)
     .run();
+}
+
+// Lägg till HELA katalogen (matchande nuvarande filter) i underlaget på en gång,
+// server-side — INSERT ... SELECT så inga per-produkt-anrop behövs. Redan
+// tillagda hoppas över (ON CONFLICT). Returnerar antal nya rader.
+export async function bulkAddBistand(env: Env, accountId: string, q: string, category: string): Promise<number> {
+  const { whereSql, binds } = catalogFilter(q, category);
+  const r = await env.DB.prepare(
+    `INSERT INTO bistand_items (account_id, product_id, motivation, created_at)
+     SELECT ?, id, '', ? FROM products${whereSql}
+     ON CONFLICT(account_id, product_id) DO NOTHING`,
+  )
+    .bind(accountId, Date.now(), ...binds)
+    .run();
+  return r.meta.changes ?? 0;
 }
 
 function escapeHtml(s: string): string {

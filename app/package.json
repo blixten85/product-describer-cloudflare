@@ -8,7 +8,7 @@
     "secret:set-provider-key": "wrangler secret put PROVIDER_CONFIG_KEY"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260629.1",
+    "@cloudflare/workers-types": "4.20260630.1",
     "typescript": "6.0.3",
     "wrangler": "4.105.0"
   }

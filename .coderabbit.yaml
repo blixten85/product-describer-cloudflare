@@ -1,8 +1,11 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 #
-# CodeRabbit ska INTE granska varje push automatiskt — det slog i deras
-# review-rate-limit och la en misslyckad "CodeRabbit"-commit-status på PR:erna.
-# Granskning sker nu på begäran: kommentera "@coderabbitai review" på en PR.
+# Auto-review återinförd 2026-07-04: usage-based billing (kontonivå, gäller
+# alla blixten85-repon) är nu aktiverat med ett tak, så anledningen till att
+# detta stängdes av (gratis-kvoten tog slut, "CodeRabbit" blev en permanent
+# misslyckad commit-status) gäller inte längre. "CodeRabbit" är nu en
+# required status check (branch-rulesetet "Protect main") — måste alltså
+# köra automatiskt, annars blockeras alla PR:ar permanent.
 reviews:
   auto_review:
-    enabled: false
+    enabled: true

@@ -426,6 +426,57 @@ async function scheduleDueCrawls(env: Env, now: number): Promise<number> {
   return sites.length;
 }
 
+// 2c. Beskriv N produkter i bakgrunden som saknar description (helst de med
+//     source_text att grunda sig på). Låg standardgräns (DESCRIBE_LIMIT) så
+//     gratis-kvoten räcker till många dagar — samexisterar med on-demand
+//     (POST /describe nedan): den här funktionen täcker katalogen gradvis över
+//     tid, on-demand ger ett enskilt svar direkt utan att vänta på turen här.
+//     Slutar tvärt vid första AllProvidersExhausted i tick:et — inget värde i
+//     att låta resten av batchen misslyckas på samma sätt (kvoten återhämtar
+//     sig inte inom samma tick).
+async function describeMissing(env: Env, chain: ProviderChain, now: number, limit: number, concurrency: number): Promise<number> {
+  const sel = await env.DB.prepare(
+    `SELECT id, title, category, source_text FROM products
+     WHERE description IS NULL
+     ORDER BY (source_text IS NOT NULL) DESC, id
+     LIMIT ?1`,
+  )
+    .bind(limit)
+    .all<{ id: number; title: string | null; category: string | null; source_text: string | null }>();
+  const products = sel.results ?? [];
+  if (products.length === 0) return 0;
+
+  let done = 0;
+  const system = buildSystemPrompt();
+  for (let i = 0; i < products.length; i += concurrency) {
+    const batch = products.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (p) => {
+        try {
+          const parts = await chain.generate(system, userMessage("", p.title ?? "", "", p.category ?? "", p.source_text ?? ""));
+          if (!parts.beskrivning) return false;
+          await env.DB.prepare(
+            "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3 WHERE id=?4",
+          )
+            .bind(parts.beskrivning, parts.varför, now, p.id)
+            .run();
+          return true;
+        } catch (err) {
+          if (err instanceof AllProvidersExhausted) throw err; // avbryt hela tick:et, inte bara denna produkt
+          console.warn(`Hoppar över produkt ${p.id}:`, err);
+          return false;
+        }
+      }),
+    ).catch((err) => {
+      if (err instanceof AllProvidersExhausted) return null; // kvot slut — sluta här, resten tas nästa tick
+      throw err;
+    });
+    if (results === null) break;
+    done += results.filter(Boolean).length;
+  }
+  return done;
+}
+
 // On-demand-beskrivning (POST /describe). Katalogen har ~32k produkter; att
 // förbeskriva alla ryms inte i gratis-Geminis kvot. I stället beskrivs en
 // produkt först när den faktiskt visas/väljs (app-Workern anropar hit) och
@@ -591,14 +642,21 @@ export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     const now = Date.now();
     try {
-      // Beskrivning sker INTE här längre — den är on-demand (POST /describe),
-      // eftersom gratis-Geminis kvot inte räcker för att förbeskriva ~32k
-      // produkter. Cronen sköter bara crawl/discovery + source_text-jobb + larm.
+      // Bakgrundsbeskrivning (låg DESCRIBE_LIMIT/tick) samexisterar med
+      // on-demand (POST /describe): täcker katalogen gradvis över tid utan
+      // att bränna kvoten på en dag — on-demand ger fortfarande ett svar
+      // direkt när en produkt faktiskt visas/väljs, oavsett var bakgrunds-
+      // loopen befinner sig.
       const reclaimed = await reclaimLeases(env, now);
       const crawls = await scheduleDueCrawls(env, now);
       const scheduled = await scheduleDetailJobs(env, now, Number(env.SCHEDULE_LIMIT) || 200);
       const alerts = await checkPriceDrops(env, now);
-      console.log(`cron: reclaimed=${reclaimed} crawls=${crawls} scheduled=${scheduled} alerts=${alerts}`);
+      let described = 0;
+      const chain = buildChainFromEnv(env);
+      if (chain) {
+        described = await describeMissing(env, chain, now, Number(env.DESCRIBE_LIMIT) || 10, Number(env.DESCRIBE_WORKERS) || 2);
+      }
+      console.log(`cron: reclaimed=${reclaimed} crawls=${crawls} scheduled=${scheduled} alerts=${alerts} described=${described}`);
     } catch (err) {
       console.error("cron misslyckades:", err);
       await reportErrorToGitHub(REPO, "Engine cron misslyckades", err, env);

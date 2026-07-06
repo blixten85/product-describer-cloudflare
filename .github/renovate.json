@@ -46,6 +46,11 @@
         "github-actions"
       ],
       "groupName": "github-actions"
+    },
+    {
+      "description": "wrangler (senaste 4.107.0 inkluderat) kräver @cloudflare/workers-types ^4.x som peer dependency — håll tillbaka major-uppdateringar tills wrangler själv stöder v5 (se stängd PR #77)",
+      "matchPackageNames": ["@cloudflare/workers-types"],
+      "allowedVersions": "<5.0.0"
     }
   ],
   "prHourlyLimit": 2,

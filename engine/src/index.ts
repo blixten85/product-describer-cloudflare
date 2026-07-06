@@ -54,6 +54,9 @@ const LEASE_MS = 120_000; // detail-jobb: kort lease (snabba)
 const LIST_LEASE_MS = 900_000; // list-jobb (crawl): lång lease, kan ta många minuter
 const MAX_ATTEMPTS = 5; // efter så många misslyckanden -> status='error'
 const MAX_LEASE = 50; // tak per lease-anrop
+const DESCRIBE_LEASE_MS = 60_000; // samma självläkande lease-mönster som render_jobs,
+// men för /describe: förhindrar att flera samtidiga anrop mot samma ocachade
+// produkt trummar på AI-leverantören parallellt (CodeRabbit-fynd, PR #29).
 
 interface LeasedJob {
   id: number;
@@ -439,10 +442,11 @@ async function describeMissing(env: Env, chain: ProviderChain, now: number, limi
     `SELECT p.id, p.title, p.category, p.source_text, p.current_price, s.name AS site_name
      FROM products p LEFT JOIN sites s ON s.id = p.site_id
      WHERE p.description IS NULL
+       AND (p.description_lease_until IS NULL OR p.description_lease_until < ?2)
      ORDER BY (p.source_text IS NOT NULL) DESC, p.id
      LIMIT ?1`,
   )
-    .bind(limit)
+    .bind(limit, now)
     .all<{
       id: number;
       title: string | null;
@@ -460,6 +464,18 @@ async function describeMissing(env: Env, chain: ProviderChain, now: number, limi
     const batch = products.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map(async (p) => {
+        // Lease mot cache-miss-stampede (CodeRabbit-fynd, PR #29) — SELECT:en
+        // ovan filtrerar redan bort rader med aktiv lease, men en interaktiv
+        // /describe-anrop kan ha tagit den EFTER SELECT:en och FÖRE den här
+        // raden hinner köra. Villkoret matchar samma självläkande mönster
+        // som render_jobs.
+        const lease = await env.DB.prepare(
+          "UPDATE products SET description_lease_until = ?1 WHERE id = ?2 AND (description_lease_until IS NULL OR description_lease_until < ?3)",
+        )
+          .bind(now + DESCRIBE_LEASE_MS, p.id, now)
+          .run();
+        if (lease.meta.changes === 0) return false; // redan under generering någon annanstans
+
         try {
           // Riktig butik/pris istället för tomma strängar (CodeRabbit-fynd,
           // PR #29) — userMessage genererade och cachade tidigare
@@ -474,14 +490,19 @@ async function describeMissing(env: Env, chain: ProviderChain, now: number, limi
               p.source_text ?? "",
             ),
           );
-          if (!parts.beskrivning) return false;
+          if (!parts.beskrivning) {
+            await env.DB.prepare("UPDATE products SET description_lease_until = NULL WHERE id = ?1").bind(p.id).run();
+            return false;
+          }
+          // Samma UPDATE släpper leasen som skriver resultatet.
           await env.DB.prepare(
-            "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3 WHERE id=?4",
+            "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3, description_lease_until=NULL WHERE id=?4",
           )
             .bind(parts.beskrivning, parts.varför, now, p.id)
             .run();
           return true;
         } catch (err) {
+          await env.DB.prepare("UPDATE products SET description_lease_until = NULL WHERE id = ?1").bind(p.id).run();
           if (err instanceof AllProvidersExhausted) throw err; // avbryt hela tick:et, inte bara denna produkt
           console.warn(`Hoppar över produkt ${p.id}:`, err);
           return false;
@@ -540,6 +561,22 @@ async function describeProduct(req: Request, env: Env): Promise<Response> {
     return json({ beskrivning: p.description, varför: p.description_why ?? "", cached: true });
   }
 
+  // Lease mot cache-miss-stampede (CodeRabbit-fynd, PR #29): utan den här
+  // spärren kan flera samtidiga /describe-anrop mot samma ocachade produkt
+  // alla passera cache-kollen ovan och trumma på AI-leverantören parallellt
+  // innan den första hunnit skriva klart. Samma självläkande lease-mönster
+  // som render_jobs (leaseJobs ovan) — en redan aktiv, inte utgången lease
+  // matchar inte villkoret, så ingen annan kan ta den samtidigt.
+  const now = Date.now();
+  const lease = await env.DB.prepare(
+    "UPDATE products SET description_lease_until = ?1 WHERE id = ?2 AND (description_lease_until IS NULL OR description_lease_until < ?3)",
+  )
+    .bind(now + DESCRIBE_LEASE_MS, p.id, now)
+    .run();
+  if (lease.meta.changes === 0) {
+    return json({ error: "beskrivning genereras redan, försök om en liten stund" }, 409);
+  }
+
   const chain = buildChainFromEnv(env);
   if (!chain) return json({ error: "ingen AI-leverantör konfigurerad" }, 503);
 
@@ -556,6 +593,9 @@ async function describeProduct(req: Request, env: Env): Promise<Response> {
       ),
     );
   } catch (err) {
+    // Släpp leasen direkt vid fel — ingen anledning att låta ett misslyckat
+    // försök blockera nästa anrop i upp till DESCRIBE_LEASE_MS.
+    await env.DB.prepare("UPDATE products SET description_lease_until = NULL WHERE id = ?1").bind(p.id).run();
     if (err instanceof AllProvidersExhausted) {
       // Bär med retry-timing (CodeRabbit-fynd, PR #29) — anroparen vet annars
       // inte när det är värt att försöka igen och kan trumma på en redan
@@ -571,10 +611,14 @@ async function describeProduct(req: Request, env: Env): Promise<Response> {
     }
     return json({ error: err instanceof Error ? err.message : "beskrivning misslyckades" }, 502);
   }
-  if (!parts.beskrivning) return json({ error: "tomt svar från AI" }, 502);
+  if (!parts.beskrivning) {
+    await env.DB.prepare("UPDATE products SET description_lease_until = NULL WHERE id = ?1").bind(p.id).run();
+    return json({ error: "tomt svar från AI" }, 502);
+  }
 
+  // Samma UPDATE släpper leasen (sätter den till NULL) som skriver resultatet.
   await env.DB.prepare(
-    "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3 WHERE id=?4",
+    "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3, description_lease_until=NULL WHERE id=?4",
   )
     .bind(parts.beskrivning, parts.varför, Date.now(), p.id)
     .run();

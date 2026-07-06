@@ -107,7 +107,11 @@ CREATE TABLE products (
   description_updated_at INTEGER,
   source_text_updated_at INTEGER,
   first_seen INTEGER NOT NULL,
-  last_updated INTEGER NOT NULL
+  last_updated INTEGER NOT NULL,
+  -- Kort lease (se render_jobs-mönstret ovan) mot cache-miss-stampede:
+  -- flera samtidiga /describe-anrop mot samma ocachade produkt ska bara
+  -- trigga ETT AI-anrop, inte ett per request (CodeRabbit-fynd, PR #29).
+  description_lease_until INTEGER
 );
 -- Partiella index för cron-urvalen (motsvarar postgres-versionens).
 CREATE INDEX idx_products_missing_desc   ON products(id) WHERE description IS NULL;

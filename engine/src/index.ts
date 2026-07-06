@@ -436,13 +436,21 @@ async function scheduleDueCrawls(env: Env, now: number): Promise<number> {
 //     sig inte inom samma tick).
 async function describeMissing(env: Env, chain: ProviderChain, now: number, limit: number, concurrency: number): Promise<number> {
   const sel = await env.DB.prepare(
-    `SELECT id, title, category, source_text FROM products
-     WHERE description IS NULL
-     ORDER BY (source_text IS NOT NULL) DESC, id
+    `SELECT p.id, p.title, p.category, p.source_text, p.current_price, s.name AS site_name
+     FROM products p LEFT JOIN sites s ON s.id = p.site_id
+     WHERE p.description IS NULL
+     ORDER BY (p.source_text IS NOT NULL) DESC, p.id
      LIMIT ?1`,
   )
     .bind(limit)
-    .all<{ id: number; title: string | null; category: string | null; source_text: string | null }>();
+    .all<{
+      id: number;
+      title: string | null;
+      category: string | null;
+      source_text: string | null;
+      current_price: number | null;
+      site_name: string | null;
+    }>();
   const products = sel.results ?? [];
   if (products.length === 0) return 0;
 
@@ -453,7 +461,19 @@ async function describeMissing(env: Env, chain: ProviderChain, now: number, limi
     const results = await Promise.all(
       batch.map(async (p) => {
         try {
-          const parts = await chain.generate(system, userMessage("", p.title ?? "", "", p.category ?? "", p.source_text ?? ""));
+          // Riktig butik/pris istället för tomma strängar (CodeRabbit-fynd,
+          // PR #29) — userMessage genererade och cachade tidigare
+          // beskrivningar med tom "Butik:"/"Pris: kr"-kontext.
+          const parts = await chain.generate(
+            system,
+            userMessage(
+              p.site_name ?? "",
+              p.title ?? "",
+              p.current_price != null ? String(p.current_price) : "",
+              p.category ?? "",
+              p.source_text ?? "",
+            ),
+          );
           if (!parts.beskrivning) return false;
           await env.DB.prepare(
             "UPDATE products SET description=?1, description_why=?2, description_updated_at=?3 WHERE id=?4",
@@ -488,23 +508,35 @@ interface ProductRow {
   source_text: string | null;
   description: string | null;
   description_why: string | null;
+  current_price: number | null;
+  site_name: string | null;
 }
 
 async function describeProduct(req: Request, env: Env): Promise<Response> {
-  const body = (await req.json().catch(() => ({}))) as { url?: string; id?: number; refresh?: boolean };
-  const where = body.url != null ? "url = ?1" : "id = ?1";
-  const key = body.url ?? body.id;
-  if (key == null) return json({ error: "url eller id krävs" }, 400);
+  const body = (await req.json().catch(() => ({}))) as { url?: unknown; id?: unknown; refresh?: unknown };
+  // Validerar kontraktet innan SQL-predikatet väljs (CodeRabbit-fynd, PR #29)
+  // — den gamla koden kastade inte typ på url/id och lät url tyst vinna om
+  // båda skickades.
+  const hasUrl = typeof body.url === "string" && body.url.trim() !== "";
+  const hasId = Number.isInteger(body.id) && Number(body.id) > 0;
+  if (hasUrl === hasId) return json({ error: "ange exakt en av url eller id" }, 400);
+
+  const where = hasUrl ? "p.url = ?1" : "p.id = ?1";
+  const key = hasUrl ? (body.url as string).trim() : body.id;
+  const refresh = body.refresh === true;
 
   const p = await env.DB.prepare(
-    `SELECT id, title, category, source_text, description, description_why FROM products WHERE ${where}`,
+    `SELECT p.id, p.title, p.category, p.source_text, p.description, p.description_why,
+            p.current_price, s.name AS site_name
+     FROM products p LEFT JOIN sites s ON s.id = p.site_id
+     WHERE ${where}`,
   )
     .bind(key)
     .first<ProductRow>();
   if (!p) return json({ error: "produkt finns inte" }, 404);
 
   // Cache-träff: returnera direkt (om inte refresh begärs).
-  if (p.description && !body.refresh) {
+  if (p.description && !refresh) {
     return json({ beskrivning: p.description, varför: p.description_why ?? "", cached: true });
   }
 
@@ -515,10 +547,28 @@ async function describeProduct(req: Request, env: Env): Promise<Response> {
   try {
     parts = await chain.generate(
       buildSystemPrompt(),
-      userMessage("", p.title ?? "", "", p.category ?? "", p.source_text ?? ""),
+      userMessage(
+        p.site_name ?? "",
+        p.title ?? "",
+        p.current_price != null ? String(p.current_price) : "",
+        p.category ?? "",
+        p.source_text ?? "",
+      ),
     );
   } catch (err) {
-    if (err instanceof AllProvidersExhausted) return json({ error: "AI-kvot tillfälligt slut, försök snart igen" }, 429);
+    if (err instanceof AllProvidersExhausted) {
+      // Bär med retry-timing (CodeRabbit-fynd, PR #29) — anroparen vet annars
+      // inte när det är värt att försöka igen och kan trumma på en redan
+      // uttömd kvot.
+      const retryAfter = Math.max(1, Math.ceil((err.resumeAt.getTime() - Date.now()) / 1000));
+      return new Response(
+        JSON.stringify({ error: "AI-kvot tillfälligt slut, försök snart igen", retry_at: err.resumeAt.toISOString() }),
+        {
+          status: 429,
+          headers: { "content-type": "application/json; charset=utf-8", "Retry-After": String(retryAfter) },
+        },
+      );
+    }
     return json({ error: err instanceof Error ? err.message : "beskrivning misslyckades" }, 502);
   }
   if (!parts.beskrivning) return json({ error: "tomt svar från AI" }, 502);

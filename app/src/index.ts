@@ -3,6 +3,7 @@
 // validerar, sparar till R2/D1 och lägger ett "extract"-meddelande i kön;
 // processor-Workern (../processor/src/index.ts) gör det faktiska arbetet.
 
+import * as Sentry from "@sentry/cloudflare";
 import { signup, login, logout, requireAccount, createSession, allowRateLimited } from "./auth";
 import { getAuthorizeUrl, handleOAuthCallback, isKnownProvider } from "./oauth";
 import { createJob, getJobsForAccount, getJob, type Env, type JobMessage } from "./db";
@@ -34,17 +35,24 @@ const PROVIDER_LABELS: Record<ProviderName, string> = {
 const SUPPORTED_EXTENSIONS = [".csv", ".xlsx", ".txt", ".docx", ".pdf"];
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB, samma gräns som Flask-versionen
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    try {
-      return await route(request, env, url);
-    } catch (err) {
-      console.error(err);
-      return json({ error: err instanceof Error ? err.message : "Ett internt fel uppstod" }, 500);
-    }
-  },
-};
+export default Sentry.withSentry(
+  (env: Env) => ({
+    dsn: env.SENTRY_DSN,
+    tracesSampleRate: 0,
+  }),
+  {
+    async fetch(request: Request, env: Env): Promise<Response> {
+      const url = new URL(request.url);
+      try {
+        return await route(request, env, url);
+      } catch (err) {
+        console.error(err);
+        Sentry.captureException(err);
+        return json({ error: err instanceof Error ? err.message : "Ett internt fel uppstod" }, 500);
+      }
+    },
+  } satisfies ExportedHandler<Env>,
+);
 
 async function route(request: Request, env: Env, url: URL): Promise<Response> {
   const { pathname } = url;

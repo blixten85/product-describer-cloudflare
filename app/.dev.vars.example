@@ -1,1 +1,5 @@
 PROVIDER_CONFIG_KEY="generera-med: openssl rand -base64 32"
+
+# Sentry-felspårning (pilot). I produktion sätts detta via `wrangler secret put
+# SENTRY_DSN` (körs manuellt, se README) — inte hårdkodat i koden.
+SENTRY_DSN="https://<key>@<org>.ingest.de.sentry.io/<project-id>"

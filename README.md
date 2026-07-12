@@ -69,6 +69,7 @@ Kräver riktiga D1-/R2-/KV-/Queue-resurser provisionerade (database_id/kv id
 
 ```bash
 cd app && npx wrangler secret put PROVIDER_CONFIG_KEY && npx wrangler deploy
+npx wrangler secret put SENTRY_DSN   # valfritt: Sentry-felspårning (pilot, endast app/ hittills)
 cd ../processor && npx wrangler secret put PROVIDER_CONFIG_KEY && npx wrangler deploy   # samma värde som ovan
 cd ../engine && npx wrangler secret put INGEST_API_KEY   # operatörsnyckel för fetcher-endpoints
 npx wrangler secret put GEMINI_API_KEY   # och/eller ANTHROPIC_API_KEY/OPENAI_API_KEY för beskriv-steget

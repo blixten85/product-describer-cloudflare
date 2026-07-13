@@ -18,7 +18,7 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
-      "after 7am and before 7:30am on saturday"
+      "after 3am and before 3:30am on saturday"
     ]
   },
   "vulnerabilityAlerts": {

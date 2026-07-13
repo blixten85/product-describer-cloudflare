@@ -29,10 +29,12 @@
   },
   "packageRules": [
     {
-      "description": "Automerge patch updates on their own (kept out of any non-major group)",
+      "description": "Group all patch/minor updates into one PR per run (reduces CodeRabbit review-count load under the shared 5/hour quota); auto-merge the bundle on green CI + review",
       "matchUpdateTypes": [
+        "minor",
         "patch"
       ],
+      "groupName": "non-major dependencies",
       "automerge": true
     },
     {
@@ -57,6 +59,6 @@
   "prHourlyLimit": 2,
   "prConcurrentLimit": 10,
   "schedule": [
-    "after 7am and before 7:30am on saturday"
+    "after 3am and before 3:30am on saturday"
   ]
 }

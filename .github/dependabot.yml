@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/app"
+      - "/engine"
+      - "/processor"
+      - "/token-rotator"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "00:00"
+      timezone: "Europe/Stockholm"
+    groups:
+      npm-patch-minor:
+        update-types: ["minor", "patch"]
+    ignore:
+      # wrangler kräver @cloudflare/workers-types ^4.x som peer dependency —
+      # håll tillbaka major-uppdateringar tills wrangler själv stöder v5
+      # (motsvarar tidigare Renovate-regeln allowedVersions: "<5.0.0", se stängd PR #77)
+      - dependency-name: "@cloudflare/workers-types"
+        versions: [">=5.0.0"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "01:00"
+      timezone: "Europe/Stockholm"
+    groups:
+      actions-patch-minor:
+        update-types: ["minor", "patch"]

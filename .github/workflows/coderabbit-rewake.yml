@@ -86,8 +86,11 @@ jobs:
                             --jq '[.statuses[] | select(.context=="CodeRabbit")] | length' 2>/dev/null || echo 0)
               if [ "${has_status:-0}" -eq 0 ] && { [ "$nudge_epoch" -eq 0 ] || [ $((now - nudge_epoch)) -ge 2400 ]; }; then
                 echo "Ingen CodeRabbit-aktivitet alls — nudgar en gång."
-                gh pr comment "$pr" --body "$NUDGE" || exit 1
-                echo "Nudge postad."
+                if gh pr comment "$pr" --body "$NUDGE"; then
+                  echo "Nudge postad."
+                else
+                  echo "::warning::Kunde inte posta nudge på PR #$pr — hoppar över, fortsätter loopen."
+                fi
               else
                 echo "Ingen CR-kommentar men status finns / redan nudgad nyligen — väntar."
               fi
@@ -115,8 +118,11 @@ jobs:
               echo "Redan nudgad efter att fönstret öppnat — väntar på CodeRabbits nästa svar."
             else
               echo "Fönstret öppet (rate-limit + $n min passerat) — re-triggar."
-              gh pr comment "$pr" --body "$NUDGE" || exit 1
-              echo "Nudge postad."
+              if gh pr comment "$pr" --body "$NUDGE"; then
+                echo "Nudge postad."
+              else
+                echo "::warning::Kunde inte posta nudge på PR #$pr — hoppar över, fortsätter loopen."
+              fi
             fi
             echo "::endgroup::"
           done <<< "$prs"

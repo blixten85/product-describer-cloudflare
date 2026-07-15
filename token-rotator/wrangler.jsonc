@@ -3,6 +3,8 @@
   "name": "cf-token-rotator",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
+  // Krävs av @sentry/cloudflare (AsyncLocalStorage-API).
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

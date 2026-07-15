@@ -3,6 +3,10 @@
   "name": "cf-token-rotator",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   // Cron-only — ingen HTTP-route (minimal attackyta för en Worker som bär
   // admin-token). Kör dagligen 03:17 UTC och förlänger CF-tokens nära utgång.
   // Gör token-hygienen självgående på Cloudflare: överlever att mp100/operatören

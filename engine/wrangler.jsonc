@@ -3,6 +3,10 @@
   "name": "product-describer-engine",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   // EN cron (*/5), EN scheduled()-handler som per tick: återställer utgångna
   // leases -> schemalägger detail-jobb för produkter utan source_text ->
   // beskriver produkter utan description (Gemini/Haiku). Allt cappat per tick.

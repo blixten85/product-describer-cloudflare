@@ -16,10 +16,12 @@ import { extractRows, ExtractionError, type ExtractedRows } from "./extractors";
 import { buildSystemPrompt, userMessage } from "../../shared/prompts";
 import { AllProvidersExhausted } from "../../shared/providers";
 import { reportErrorToGitHub, type GitHubReportEnv } from "../../shared/github-report";
+import * as Sentry from "@sentry/cloudflare";
 
 interface Env extends ProviderConfigEnv, GitHubReportEnv {
   UPLOADS: R2Bucket;
   JOB_QUEUE: Queue<JobMessage>;
+  SENTRY_DSN?: string;
 }
 
 type JobMessage = { type: "extract"; jobId: string } | { type: "describe"; jobId: string; rowIndex: number };
@@ -37,7 +39,12 @@ interface JobRow {
   total: number;
 }
 
-export default {
+export default Sentry.withSentry<Env, JobMessage>(
+  (env: Env) => ({
+    dsn: env.SENTRY_DSN,
+    tracesSampleRate: 1.0,
+  }),
+  {
   async queue(batch: MessageBatch<JobMessage>, env: Env): Promise<void> {
     for (const msg of batch.messages) {
       try {
@@ -61,7 +68,8 @@ export default {
       }
     }
   },
-};
+  },
+);
 
 async function getJob(env: Env, jobId: string): Promise<JobRow | null> {
   return env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(jobId).first<JobRow>();

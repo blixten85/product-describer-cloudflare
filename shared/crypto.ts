@@ -91,3 +91,15 @@ export function randomId(): string {
     .replace(/[+/=]/g, "")
     .slice(0, 22);
 }
+
+// SHA-256-hash (hex, alltid 64 tecken) av en godtyckligt lång sträng. Används
+// för att härleda KV-nycklar från t.ex. sessionstokens: KV:s nyckelgräns är
+// 512 bytes UTF-8, men en cookie/token kan i teorin vara hur lång som helst
+// (klientfel, manipulerad request) — en fast kort nyckellängd tar bort det
+// felläget helt, oavsett indatans längd.
+export async function sha256Hex(data: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}

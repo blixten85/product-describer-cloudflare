@@ -4,7 +4,7 @@
 // Flask-installationer från innan kontosystemet fanns — ej relevant för en
 // helt ny Cloudflare-installation).
 
-import { hashPassword, verifyPassword, randomId } from "../../shared/crypto";
+import { hashPassword, verifyPassword, randomId, sha256Hex } from "../../shared/crypto";
 import { createAccount, getAccountByEmail, getAccountById, type Env } from "./db";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 dagar, samma som politiker-webapp
@@ -31,20 +31,54 @@ export async function login(env: Env, email: string, password: string): Promise<
   return { sessionToken: await createSession(env, account.id) };
 }
 
+// KV-nycklar härleds alltid från en hash av sessionstoken, aldrig token direkt.
+// KV:s nyckelgräns är 512 bytes UTF-8 — en rå token/cookie-sträng kan i teorin
+// bli godtyckligt lång (klientbugg, manipulerad request) och skulle då krascha
+// GET/DELETE med "key length limit"-felet. sha256Hex ger alltid en fast 64-tecken
+// nyckel oavsett indatans längd. Skriv- (createSession/logout) och läs-sidan
+// (getAccountFromSession) MÅSTE använda exakt samma härledning, annars matchar
+// nycklarna inte längre.
+async function sessionKey(sessionToken: string): Promise<string> {
+  return `session:${await sha256Hex(sessionToken)}`;
+}
+
 // Skapar en session för ett konto-id (delas av lösenordslogin och OAuth-callback).
 export async function createSession(env: Env, accountId: string): Promise<string> {
   const sessionToken = randomId() + randomId();
-  await env.SESSIONS.put(`session:${sessionToken}`, accountId, { expirationTtl: SESSION_TTL_SECONDS });
+  await env.SESSIONS.put(await sessionKey(sessionToken), accountId, { expirationTtl: SESSION_TTL_SECONDS });
   return sessionToken;
 }
 
 export async function logout(env: Env, sessionToken: string | null): Promise<void> {
-  if (sessionToken) await env.SESSIONS.delete(`session:${sessionToken}`);
+  if (!sessionToken) return;
+  // Radera alltid den hashade nyckeln (nuvarande format).
+  await env.SESSIONS.delete(await sessionKey(sessionToken));
+  // Radera också legacy-nyckeln (rå token) om token är kort nog att vara säker.
+  // Detta hanterar sessioner skapade före övergången till hashade nycklar.
+  if (sessionToken.length < 100) {
+    await env.SESSIONS.delete(`session:${sessionToken}`);
+  }
 }
 
 export async function getAccountFromSession(env: Env, sessionToken: string | null) {
   if (!sessionToken) return null;
-  const accountId = await env.SESSIONS.get(`session:${sessionToken}`);
+
+  // Försök först med den hashade nyckeln (nuvarande format).
+  const hashedKey = await sessionKey(sessionToken);
+  let accountId = await env.SESSIONS.get(hashedKey);
+
+  // Om inte hittad och token är kort nog, kolla legacy-nyckeln (rå token).
+  // Migrera sessionen till det nya formatet om den finns där.
+  if (!accountId && sessionToken.length < 100) {
+    const legacyKey = `session:${sessionToken}`;
+    accountId = await env.SESSIONS.get(legacyKey);
+    if (accountId) {
+      // Migrera: skriv under den nya hashade nyckeln, radera legacy-nyckeln.
+      await env.SESSIONS.put(hashedKey, accountId, { expirationTtl: SESSION_TTL_SECONDS });
+      await env.SESSIONS.delete(legacyKey);
+    }
+  }
+
   if (!accountId) return null;
   return getAccountById(env.DB, accountId);
 }

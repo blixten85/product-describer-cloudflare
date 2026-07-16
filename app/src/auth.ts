@@ -34,7 +34,7 @@ export async function login(env: Env, email: string, password: string): Promise<
 // KV-nycklar härleds alltid från en hash av sessionstoken, aldrig token direkt.
 // KV:s nyckelgräns är 512 bytes UTF-8 — en rå token/cookie-sträng kan i teorin
 // bli godtyckligt lång (klientbugg, manipulerad request) och skulle då krascha
-// GET/PUT med "key length limit"-felet. sha256Hex ger alltid en fast 64-tecken
+// GET/DELETE med "key length limit"-felet. sha256Hex ger alltid en fast 64-tecken
 // nyckel oavsett indatans längd. Skriv- (createSession/logout) och läs-sidan
 // (getAccountFromSession) MÅSTE använda exakt samma härledning, annars matchar
 // nycklarna inte längre.
@@ -64,7 +64,8 @@ export async function getAccountFromSession(env: Env, sessionToken: string | nul
   if (!sessionToken) return null;
 
   // Försök först med den hashade nyckeln (nuvarande format).
-  let accountId = await env.SESSIONS.get(await sessionKey(sessionToken));
+  const hashedKey = await sessionKey(sessionToken);
+  let accountId = await env.SESSIONS.get(hashedKey);
 
   // Om inte hittad och token är kort nog, kolla legacy-nyckeln (rå token).
   // Migrera sessionen till det nya formatet om den finns där.
@@ -73,7 +74,7 @@ export async function getAccountFromSession(env: Env, sessionToken: string | nul
     accountId = await env.SESSIONS.get(legacyKey);
     if (accountId) {
       // Migrera: skriv under den nya hashade nyckeln, radera legacy-nyckeln.
-      await env.SESSIONS.put(await sessionKey(sessionToken), accountId, { expirationTtl: SESSION_TTL_SECONDS });
+      await env.SESSIONS.put(hashedKey, accountId, { expirationTtl: SESSION_TTL_SECONDS });
       await env.SESSIONS.delete(legacyKey);
     }
   }

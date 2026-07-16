@@ -50,12 +50,34 @@ export async function createSession(env: Env, accountId: string): Promise<string
 }
 
 export async function logout(env: Env, sessionToken: string | null): Promise<void> {
-  if (sessionToken) await env.SESSIONS.delete(await sessionKey(sessionToken));
+  if (!sessionToken) return;
+  // Radera alltid den hashade nyckeln (nuvarande format).
+  await env.SESSIONS.delete(await sessionKey(sessionToken));
+  // Radera också legacy-nyckeln (rå token) om token är kort nog att vara säker.
+  // Detta hanterar sessioner skapade före övergången till hashade nycklar.
+  if (sessionToken.length < 100) {
+    await env.SESSIONS.delete(`session:${sessionToken}`);
+  }
 }
 
 export async function getAccountFromSession(env: Env, sessionToken: string | null) {
   if (!sessionToken) return null;
-  const accountId = await env.SESSIONS.get(await sessionKey(sessionToken));
+
+  // Försök först med den hashade nyckeln (nuvarande format).
+  let accountId = await env.SESSIONS.get(await sessionKey(sessionToken));
+
+  // Om inte hittad och token är kort nog, kolla legacy-nyckeln (rå token).
+  // Migrera sessionen till det nya formatet om den finns där.
+  if (!accountId && sessionToken.length < 100) {
+    const legacyKey = `session:${sessionToken}`;
+    accountId = await env.SESSIONS.get(legacyKey);
+    if (accountId) {
+      // Migrera: skriv under den nya hashade nyckeln, radera legacy-nyckeln.
+      await env.SESSIONS.put(await sessionKey(sessionToken), accountId, { expirationTtl: SESSION_TTL_SECONDS });
+      await env.SESSIONS.delete(legacyKey);
+    }
+  }
+
   if (!accountId) return null;
   return getAccountById(env.DB, accountId);
 }

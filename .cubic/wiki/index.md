@@ -2,66 +2,67 @@
 
 > This directory is machine-managed by cubic. Edit wiki content through [cubic wiki settings](https://www.cubic.dev/wiki/blixten85/product-describer-cloudflare) and custom instructions.
 
-Wiki version: 1
-Source commit: 32cf25690b23d01cb0892c40f5f1c23bd4c4e4d3
+Wiki version: 2
+Source commit: db0cf84a50466bfd40b087ceebdfac4a9bb7181f
 Source branch: main
-Generated: 2026-07-19T20:22:31.937Z
+Generated: 2026-07-20T06:43:18.719Z
 
 ## Contents
 
 ### Overview
 
-- [Home & Introduction](01-overview/01-home-introduction.md)
-- [Local Setup & Development](01-overview/02-local-setup.md)
-- [Migration from Flask & Docker](01-overview/03-migration-flask-docker.md)
-- [GitHub Workflows & Standards](01-overview/04-github-workflows-standards.md)
+- [Home & Introduction](01-s-overview/01-page-overview-home.md)
+- [Local Setup & Development](01-s-overview/02-page-overview-setup.md)
+- [Migration from Flask & Docker](01-s-overview/03-page-overview-migration.md)
+- [GitHub Workflows & Standards](01-s-overview/04-page-overview-workflows.md)
 
 ### System Architecture
 
-- [Architecture Overview](02-system-architecture/01-architecture-overview.md)
-- [Playwright Fetcher & Pull Model](02-system-architecture/02-playwright-fetcher.md)
-- [Security, Auth & Roles](02-system-architecture/03-security-auth-roles.md)
+- [Architecture Overview](02-s-architecture/01-page-arch-overview.md)
+- [Playwright Fetcher & Pull Model](02-s-architecture/02-page-arch-fetcher.md)
+- [Security, Authentication, & Roles](02-s-architecture/03-page-arch-security.md)
 
 ### Core Features
 
-- [Document Extraction Engine](03-core-features/01-document-extraction.md)
-- [Row-by-Row AI Generation](03-core-features/02-row-by-row-ai-generation.md)
-- [Public Catalog & Browsing](03-core-features/03-public-catalog.md)
-- [Price Monitoring & Watchers](03-core-features/04-price-monitoring.md)
-- [Page Suggestions & Approvals](03-core-features/05-page-suggestions.md)
-- [Ansökningsunderlag (Social Services)](03-core-features/06-ansokningsunderlag.md)
-- [Automatic Error Reporting](03-core-features/07-automatic-error-reporting.md)
+- [Document Extraction Engine](03-s-features/01-page-feat-extraction.md)
+- [Row-by-Row AI Generation](03-s-features/02-page-feat-ai-gen.md)
+- [Public Catalog & Browsing](03-s-features/03-page-feat-catalog.md)
+- [Price Monitoring & Alerts](03-s-features/04-page-feat-price.md)
+- [Page Suggestions & Approvals](03-s-features/05-page-feat-suggestions.md)
+- [Ansökningsunderlag / Bistånd](03-s-features/06-page-feat-bistand.md)
+- [Automatic Error Reporting](03-s-features/07-page-feat-error-reporting.md)
 
 ### Data Management & Flow
 
-- [D1 Database Schema & Models](04-data-management-flow/01-d1-database-schema.md)
-- [R2 Storage Integration](04-data-management-flow/02-r2-storage-integration.md)
-- [D1 Lease & Acknowledgment Pattern](04-data-management-flow/03-d1-lease-ack-pattern.md)
-- [Engine Cron Scheduler Workflow](04-data-management-flow/04-engine-cron-scheduler.md)
+- [D1 Database Schema & Models](04-s-data/01-page-data-d1.md)
+- [Job Lease & Acknowledgment Pattern](04-s-data/02-page-data-lease.md)
+- [R2 File Storage Integration](04-s-data/03-page-data-r2.md)
+- [Engine Cron Scheduler Workflow](04-s-data/04-page-data-cron.md)
 
 ### Frontend Components
 
-- [Main UI & App Routing](05-frontend-components/01-main-ui-routing.md)
-- [Admin Dashboard UI](05-frontend-components/02-admin-dashboard.md)
+- [Main UI & Routing](05-s-frontend/01-page-ui-main.md)
+- [Admin Dashboard UI](05-s-frontend/02-page-ui-admin.md)
+- [CSS & Styling Architecture](05-s-frontend/03-page-ui-css.md)
 
 ### Backend Systems
 
-- [App Worker API](06-backend-systems/01-app-worker-api.md)
-- [Processor Worker (Queue Consumer)](06-backend-systems/02-processor-worker.md)
-- [Engine Worker (Catalog Engine)](06-backend-systems/03-engine-worker.md)
-- [Token Rotator Worker](06-backend-systems/04-token-rotator-worker.md)
+- [App Worker API](06-s-backend/01-page-backend-app.md)
+- [Processor Worker (Queue Consumer)](06-s-backend/02-page-backend-processor.md)
+- [Engine Worker (Catalog Engine)](06-s-backend/03-page-backend-engine.md)
+- [Token Rotator Worker](06-s-backend/04-page-backend-rotator.md)
 
 ### Model Integration
 
-- [Supported AI Providers](07-model-integration/01-ai-providers.md)
-- [LLM Prompts & Instructions](07-model-integration/02-prompts-instructions.md)
-- [Encrypted Provider Configurations](07-model-integration/03-encrypted-provider-configs.md)
+- [Supported AI Providers](07-s-model/01-page-model-providers.md)
+- [LLM Prompts & Instructions](07-s-model/02-page-model-prompts.md)
+- [Encrypted Provider Configurations](07-s-model/03-page-model-configs.md)
 
 ### Deployment & Infrastructure
 
-- [Deployment & Secrets Management](08-deployment-infrastructure/01-deployment-configuration.md)
+- [Deployment & Secrets Management](08-s-deploy/01-page-deploy-secrets.md)
 
 ### Extensibility and Customization
 
-- [Extending Alert Channels](09-extensibility-customization/01-adding-alert-channels.md)
-- [Adding New AI Providers](09-extensibility-customization/02-adding-ai-providers.md)
+- [Adding New AI Providers](09-s-extensibility/01-page-extend-ai.md)
+- [Extending Alert Channels](09-s-extensibility/02-page-extend-alerts.md)

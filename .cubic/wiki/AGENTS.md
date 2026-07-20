@@ -4,6 +4,6 @@ This directory contains AI-generated repository documentation maintained by cubi
 Treat the repository code as the source of truth when these docs disagree with implementation.
 
 Repository: blixten85/product-describer-cloudflare
-Wiki version: 1
-Source commit: 32cf25690b23d01cb0892c40f5f1c23bd4c4e4d3
-Generated: 2026-07-19T20:22:31.937Z
+Wiki version: 2
+Source commit: db0cf84a50466bfd40b087ceebdfac4a9bb7181f
+Generated: 2026-07-20T06:43:18.719Z

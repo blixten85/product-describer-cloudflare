@@ -8,11 +8,11 @@
     "secret:set-admin": "wrangler secret put CF_ADMIN_TOKEN"
   },
   "dependencies": {
-    "@sentry/cloudflare": "^10.65.0"
+    "@sentry/cloudflare": "^10.66.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260702.1",
+    "@cloudflare/workers-types": "5.20260722.1",
     "typescript": "7.0.2",
-    "wrangler": "4.107.0"
+    "wrangler": "4.112.0"
   }
 }

@@ -1,5 +1,8 @@
 PROVIDER_CONFIG_KEY="generera-med: openssl rand -base64 32"
 
+# OAuth-värden sätts i produktion via `wrangler secret put <NAMN>`.
+OAUTH_MICROSOFT_CLIENT_ID="your-microsoft-oauth-client-id"
+
 # Sentry-felspårning (pilot). I produktion sätts detta via `wrangler secret put
 # SENTRY_DSN` (körs manuellt, se README) — inte hårdkodat i koden.
 SENTRY_DSN="https://<key>@<org>.ingest.de.sentry.io/<project-id>"

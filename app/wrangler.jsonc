@@ -44,11 +44,10 @@
   "vars": {
     // On-demand-beskrivning (Avd. B) proxas hit. INGEST_API_KEY sätts som secret.
     "ENGINE_URL": "https://engine.denied.se",
-    // OAuth-inloggning — egna appar för product-describer (client_id ej känsligt;
-    // client_secret sätts som wrangler secret). Callback-URL:er registrerade i
+    // OAuth-inloggning — egna appar för product-describer. Microsoft client_id
+    // och båda client_secret sätts som wrangler secrets. Callback-URL:er registrerade i
     // respektive OAuth-app: product-describer.denied.se/api/oauth/<provider>/callback.
     "OAUTH_GOOGLE_CLIENT_ID": "551393755081-gtbd45b203icbbp0cu0q0p4meppli2fu.apps.googleusercontent.com",
-    "OAUTH_MICROSOFT_CLIENT_ID": "24533a05-748f-4e59-acc5-7cbd0c42dd96",
     "MAIL_FROM": "noreply@send.denied.se",
     "ADMIN_EMAIL": "anders.eriksson@denied.se"
   }

@@ -22,8 +22,6 @@ export interface Env {
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
   ADMIN_EMAIL?: string;
-  // Sentry-felspårning (pilot i app/ — se README).
-  SENTRY_DSN?: string;
 }
 
 export interface Account {

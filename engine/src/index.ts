@@ -26,12 +26,10 @@ import {
 } from "../../shared/providers";
 import { buildSystemPrompt, userMessage } from "../../shared/prompts";
 import { reportErrorToGitHub, type GitHubReportEnv } from "../../shared/github-report";
-import * as Sentry from "@sentry/cloudflare";
 
 interface Env extends GitHubReportEnv {
   DB: D1Database;
   INGEST_API_KEY: string;
-  SENTRY_DSN?: string;
   // AI-leverantörer (Wrangler secrets) — samma som sync-Workern. Operatörens
   // egna nycklar, inte kontobaserat.
   ANTHROPIC_API_KEY?: string;
@@ -688,12 +686,7 @@ async function checkPriceDrops(env: Env, now: number): Promise<number> {
   return sent;
 }
 
-export default Sentry.withSentry(
-  (env: Env) => ({
-    dsn: env.SENTRY_DSN,
-    tracesSampleRate: 1.0,
-  }),
-  {
+export default {
   // EN cron-trigger (*/5), EN handler som gör allt sekventiellt och cappat per
   // tick (DESIGN.md §4.4). Inga flera cronjobb att koordinera.
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
@@ -744,5 +737,4 @@ export default Sentry.withSentry(
       return json({ error: "internt fel" }, 500);
     }
   },
-  } satisfies ExportedHandler<Env>,
-);
+  } satisfies ExportedHandler<Env>;

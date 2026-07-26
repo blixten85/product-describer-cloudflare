@@ -7,9 +7,6 @@
     "typecheck": "tsc --noEmit",
     "secret:set-admin": "wrangler secret put CF_ADMIN_TOKEN"
   },
-  "dependencies": {
-    "@sentry/cloudflare": "^10.68.0"
-  },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260726.1",
     "typescript": "7.0.2",

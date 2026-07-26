@@ -3,7 +3,7 @@
   "name": "product-describer-processor",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
-  // Krävs av @sentry/cloudflare (AsyncLocalStorage-API).
+  // nodejs_compat: behövs av beroenden som använder node:-API:er.
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,

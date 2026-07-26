@@ -9,14 +9,11 @@
 // Endast scheduled() — ingen HTTP-route (Workern bär en kraftfull admin-token,
 // så ingen yta att anropa utifrån).
 
-import * as Sentry from "@sentry/cloudflare";
-
 interface Env {
   CF_ADMIN_TOKEN: string; // Account API Tokens Write
   CF_ACCOUNT_ID: string;
   THRESHOLD_DAYS?: string;
   EXTEND_DAYS?: string;
-  SENTRY_DSN?: string;
 }
 
 const API = "https://api.cloudflare.com/client/v4";
@@ -37,12 +34,7 @@ async function cf(method: string, path: string, token: string, body?: unknown): 
   return res.json();
 }
 
-export default Sentry.withSentry(
-  (env: Env) => ({
-    dsn: env.SENTRY_DSN,
-    tracesSampleRate: 1.0,
-  }),
-  {
+export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     const acc = env.CF_ACCOUNT_ID;
     const admin = env.CF_ADMIN_TOKEN;
@@ -93,5 +85,4 @@ export default Sentry.withSentry(
     }
     console.log(`cf-token-rotator klar: ${extended} token(s) förlängda.`);
   },
-  } satisfies ExportedHandler<Env>,
-);
+  } satisfies ExportedHandler<Env>;

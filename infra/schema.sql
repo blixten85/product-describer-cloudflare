@@ -138,6 +138,11 @@ CREATE TABLE render_jobs (
 );
 -- Snabbt urval av leasbara jobb (pending, eller leased med utgången lease).
 CREATE INDEX idx_render_jobs_claimable ON render_jobs(status, lease_until);
+-- Täckande index för de upprepade NOT EXISTS-kontrollerna på url (cron +
+-- ingest). Utan detta scannas alla pending/leased-rader per anrop, vilket
+-- ensamt orsakade ~79 miljarder lästa rader i juli 2026. Se
+-- migrations/0001_add_render_jobs_url_index.sql.
+CREATE INDEX idx_render_jobs_url_type_status ON render_jobs(url, type, status);
 
 -- Avd. B prisbevakning: en rad per (konto, bevakad produkt). last_alert håller
 -- cooldown per bevakning (så samma prisfall inte larmas om och om).

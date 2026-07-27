@@ -3,16 +3,15 @@
   "name": "cf-token-rotator",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
-  // nodejs_compat: behövs av beroenden som använder node:-API:er.
-  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
   },
-  // Cron-only — ingen HTTP-route (minimal attackyta för en Worker som bär
-  // admin-token). Kör dagligen 03:17 UTC och förlänger CF-tokens nära utgång.
-  // Gör token-hygienen självgående på Cloudflare: överlever att mp100/operatören
-  // försvinner (till skillnad från ~/.claude-admin/rotate-keys.py som kör på servern).
+  // Cron-only — ingen HTTP-route. Kör dagligen 03:17 UTC och MAILAR om tokens
+  // nära utgång. Den förlängde dem automatiskt tidigare; det togs bort
+  // 2026-07-27 eftersom tyst självförlängning gör att ingen någonsin omprövar
+  // om nyckeln fortfarande behövs. Nu krävs ett mänskligt beslut en gång per
+  // tokenlivstid, och mailet upprepas varje dygn tills det är taget.
   "triggers": {
     "crons": ["17 3 * * *"]
   },
@@ -20,10 +19,14 @@
   "preview_urls": false,
   "vars": {
     "CF_ACCOUNT_ID": "b74f8c0c6a92f3006483840cf27372fd",
-    "THRESHOLD_DAYS": "30", // förläng tokens inom så här många dagar från utgång
-    "EXTEND_DAYS": "365" // ny livslängd
+    "THRESHOLD_DAYS": "30", // maila när en token är inom så här många dagar från utgång
+    "EMAIL_TO": "root@denied.se",
+    "EMAIL_FROM": "CF-tokenvakt <tokens@send.denied.se>"
   }
-  // Secret (wrangler secret put): CF_ADMIN_TOKEN — admin "manage-tokens"-token
-  // (Account API Tokens Write). Kan förlänga alla kontots tokens inkl. sig själv
-  // -> självförevigande så länge Workern kör och kontot är aktivt.
+  // Secrets (wrangler secret put):
+  //   CF_ADMIN_TOKEN  — behöver numera BARA "Account API Tokens Read". Den har
+  //                     fortfarande Write kvar sedan förlängningsläget; krymp
+  //                     den i dashboarden, det går inte via API utan en
+  //                     tokenhanterande token (som medvetet inte finns lokalt).
+  //   RESEND_API_KEY  — för utskicket. Samma Resend-konto som politiker-webapp.
 }

@@ -18,7 +18,11 @@ name: Deploy
 #
 # Secrets (Repo → Settings → Secrets → Actions):
 #   CLOUDFLARE_API_TOKEN     — Workers Scripts:Edit + binding-resurserna (D1/KV/R2/Queues)
-#   CLOUDFLARE_ACCOUNT_ID    — kontots ID
+#
+# Variables (Repo → Settings → Variables → Actions):
+#   CLOUDFLARE_ACCOUNT_ID    — kontots ID. Variabel, inte secret: det är ingen
+#                              hemlighet, och som secret maskeras det i loggarna
+#                              vilket bara försvårar felsökning.
 #
 # wrangler deploy rör INTE secrets satta via `wrangler secret put` — bara kod,
 # vars och bindings uppdateras.
@@ -131,7 +135,7 @@ jobs:
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
   # Flytta vattenmärket till deployad HEAD — bara vid schema och bara om ingen
   # deploy failade (skippad deploy = inga worker-ändringar = OK att avancera).
